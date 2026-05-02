@@ -409,6 +409,20 @@ components:
         - source
         - count
 
+    ReplyVariant:
+      type: object
+      properties:
+        label:
+          type: string
+        message:
+          type: string
+        style:
+          type: string
+      required:
+        - label
+        - message
+        - style
+
     GeneratedResponse:
       type: object
       properties:
@@ -416,9 +430,14 @@ components:
           type: string
         lead_id:
           type: string
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplyVariant"
       required:
         - message
         - lead_id
+        - variants
 
     UpdateLeadStatusInput:
       type: object
