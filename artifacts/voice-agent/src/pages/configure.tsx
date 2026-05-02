@@ -145,14 +145,16 @@ export default function Configure() {
     setSaveError("");
     mutation.mutate(
       {
-        businessName,
-        businessType,
-        greeting,
-        instructions,
-        voice,
-        transferNumber: transferNumber || undefined,
-        hoursJson: JSON.stringify(hours),
-        servicesJson: JSON.stringify(services),
+        data: {
+          businessName,
+          businessType,
+          greeting,
+          instructions,
+          voice,
+          transferNumber: transferNumber || undefined,
+          hoursJson: JSON.stringify(hours),
+          servicesJson: JSON.stringify(services),
+        },
       },
       {
         onSuccess: () => setSaved(true),

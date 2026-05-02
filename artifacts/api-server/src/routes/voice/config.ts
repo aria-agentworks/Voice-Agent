@@ -17,8 +17,12 @@ const DEFAULT_HOURS = JSON.stringify({
 
 function getBaseUrl(req: { headers: Record<string, string | string[] | undefined> }): string {
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
-  const host = (req.headers["x-forwarded-host"] as string) || (req.headers["host"] as string);
-  return `${proto}://${host}`;
+  const forwardedHost = req.headers["x-forwarded-host"] as string;
+  const host = req.headers["host"] as string;
+  // Prefer the forwarded host; fall back to REPLIT_DOMAINS so the webhook URL is always correct
+  const replitDomain = process.env.REPLIT_DOMAINS?.split(",")[0];
+  const resolvedHost = forwardedHost || replitDomain || host;
+  return `${proto}://${resolvedHost}`;
 }
 
 function maskConfig(config: typeof voiceConfigs.$inferSelect, baseUrl: string) {

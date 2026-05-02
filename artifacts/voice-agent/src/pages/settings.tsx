@@ -59,7 +59,7 @@ export default function Settings() {
     };
     if (authToken) payload.twilioAuthToken = authToken;
 
-    mutation.mutate(payload as Parameters<typeof mutation.mutate>[0], {
+    mutation.mutate({ data: payload as Parameters<typeof mutation.mutate>[0]["data"] }, {
       onSuccess: () => {
         setSaved(true);
         setAuthToken("");
