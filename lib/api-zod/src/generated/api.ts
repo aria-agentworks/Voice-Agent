@@ -372,3 +372,168 @@ export const DeleteKeywordResponse = zod.object({
   deleted: zod.boolean(),
   id: zod.string(),
 });
+
+/**
+ * @summary Get voice agent business configuration
+ */
+export const GetVoiceConfigResponse = zod.object({
+  id: zod.string(),
+  businessName: zod.string(),
+  businessType: zod.string(),
+  greeting: zod.string(),
+  instructions: zod.string(),
+  hoursJson: zod.string(),
+  servicesJson: zod.string(),
+  voice: zod.string(),
+  transferNumber: zod.string().nullish(),
+  twilioPhoneNumber: zod.string().nullish(),
+  twilioAccountSid: zod.string().nullish(),
+  twilioAuthToken: zod.string().nullish(),
+  isActive: zod.boolean(),
+  webhookUrl: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update voice agent business configuration
+ */
+export const UpdateVoiceConfigBody = zod.object({
+  businessName: zod.string().optional(),
+  businessType: zod.string().optional(),
+  greeting: zod.string().optional(),
+  instructions: zod.string().optional(),
+  hoursJson: zod.string().optional(),
+  servicesJson: zod.string().optional(),
+  voice: zod.string().optional(),
+  transferNumber: zod.string().nullish(),
+  twilioAccountSid: zod.string().nullish(),
+  twilioAuthToken: zod.string().nullish(),
+  twilioPhoneNumber: zod.string().nullish(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateVoiceConfigResponse = zod.object({
+  id: zod.string(),
+  businessName: zod.string(),
+  businessType: zod.string(),
+  greeting: zod.string(),
+  instructions: zod.string(),
+  hoursJson: zod.string(),
+  servicesJson: zod.string(),
+  voice: zod.string(),
+  transferNumber: zod.string().nullish(),
+  twilioPhoneNumber: zod.string().nullish(),
+  twilioAccountSid: zod.string().nullish(),
+  twilioAuthToken: zod.string().nullish(),
+  isActive: zod.boolean(),
+  webhookUrl: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Get aggregated call statistics
+ */
+export const GetVoiceCallStatsResponse = zod.object({
+  totalCalls: zod.number(),
+  todayCalls: zod.number(),
+  avgDurationSeconds: zod.number().nullable(),
+  inboundCount: zod.number(),
+  outboundCount: zod.number(),
+  byStatus: zod.array(
+    zod.object({
+      status: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  byOutcome: zod.array(
+    zod.object({
+      outcome: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get paginated call history
+ */
+export const getVoiceCallsQueryPageDefault = 1;
+export const getVoiceCallsQueryLimitDefault = 20;
+
+export const GetVoiceCallsQueryParams = zod.object({
+  page: zod.coerce.number().default(getVoiceCallsQueryPageDefault),
+  limit: zod.coerce.number().default(getVoiceCallsQueryLimitDefault),
+  direction: zod.coerce.string().optional(),
+  status: zod.coerce.string().optional(),
+});
+
+export const GetVoiceCallsResponse = zod.object({
+  calls: zod.array(
+    zod.object({
+      id: zod.string(),
+      callSid: zod.string(),
+      fromNumber: zod.string(),
+      toNumber: zod.string(),
+      direction: zod.string(),
+      status: zod.string(),
+      durationSeconds: zod.number().nullish(),
+      outcome: zod.string().nullish(),
+      summary: zod.string().nullish(),
+      startedAt: zod.string(),
+      endedAt: zod.string().nullish(),
+      messageCount: zod.number(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  totalPages: zod.number(),
+});
+
+/**
+ * @summary Get call detail with full transcript
+ */
+export const GetVoiceCallParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetVoiceCallResponse = zod.object({
+  call: zod.object({
+    id: zod.string(),
+    callSid: zod.string(),
+    fromNumber: zod.string(),
+    toNumber: zod.string(),
+    direction: zod.string(),
+    status: zod.string(),
+    durationSeconds: zod.number().nullish(),
+    outcome: zod.string().nullish(),
+    summary: zod.string().nullish(),
+    startedAt: zod.string(),
+    endedAt: zod.string().nullish(),
+    messageCount: zod.number(),
+  }),
+  messages: zod.array(
+    zod.object({
+      id: zod.string(),
+      callId: zod.string(),
+      role: zod.string(),
+      content: zod.string(),
+      audioReady: zod.boolean(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Initiate an outbound call
+ */
+export const CreateOutboundCallBody = zod.object({
+  toNumber: zod.string(),
+  purpose: zod.string().nullish(),
+});
+
+export const CreateOutboundCallResponse = zod.object({
+  callSid: zod.string(),
+  status: zod.string(),
+  toNumber: zod.string(),
+});

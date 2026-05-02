@@ -230,9 +230,117 @@ export interface EnrichmentData {
   source_profile: SourceProfile | null;
 }
 
+export interface VoiceConfig {
+  id: string;
+  businessName: string;
+  businessType: string;
+  greeting: string;
+  instructions: string;
+  hoursJson: string;
+  servicesJson: string;
+  voice: string;
+  transferNumber?: string | null;
+  twilioPhoneNumber?: string | null;
+  twilioAccountSid?: string | null;
+  twilioAuthToken?: string | null;
+  isActive: boolean;
+  webhookUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateVoiceConfigInput {
+  businessName?: string;
+  businessType?: string;
+  greeting?: string;
+  instructions?: string;
+  hoursJson?: string;
+  servicesJson?: string;
+  voice?: string;
+  transferNumber?: string | null;
+  twilioAccountSid?: string | null;
+  twilioAuthToken?: string | null;
+  twilioPhoneNumber?: string | null;
+  isActive?: boolean;
+}
+
+export interface VoiceCall {
+  id: string;
+  callSid: string;
+  fromNumber: string;
+  toNumber: string;
+  direction: string;
+  status: string;
+  durationSeconds?: number | null;
+  outcome?: string | null;
+  summary?: string | null;
+  startedAt: string;
+  endedAt?: string | null;
+  messageCount: number;
+}
+
+export interface VoiceCallsResponse {
+  calls: VoiceCall[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+export interface VoiceStatusCount {
+  status: string;
+  count: number;
+}
+
+export interface VoiceOutcomeCount {
+  outcome: string;
+  count: number;
+}
+
+export interface VoiceCallStats {
+  totalCalls: number;
+  todayCalls: number;
+  avgDurationSeconds: number | null;
+  inboundCount: number;
+  outboundCount: number;
+  byStatus: VoiceStatusCount[];
+  byOutcome: VoiceOutcomeCount[];
+}
+
+export interface VoiceMessage {
+  id: string;
+  callId: string;
+  role: string;
+  content: string;
+  audioReady: boolean;
+  createdAt: string;
+}
+
+export interface VoiceCallDetail {
+  call: VoiceCall;
+  messages: VoiceMessage[];
+}
+
+export interface CreateOutboundCallInput {
+  toNumber: string;
+  purpose?: string | null;
+}
+
+export interface CreateOutboundCallResult {
+  callSid: string;
+  status: string;
+  toNumber: string;
+}
+
 export type GetLeadsParams = {
   min_score?: number;
   source?: string;
   limit?: number;
   subreddit?: string;
+};
+
+export type GetVoiceCallsParams = {
+  page?: number;
+  limit?: number;
+  direction?: string;
+  status?: string;
 };

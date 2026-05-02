@@ -7,10 +7,13 @@
  */
 
 export * from "./createKeywordInput";
+export * from "./createOutboundCallInput";
+export * from "./createOutboundCallResult";
 export * from "./deleteKeywordResult";
 export * from "./enrichmentData";
 export * from "./generatedResponse";
 export * from "./getLeadsParams";
+export * from "./getVoiceCallsParams";
 export * from "./healthStatus";
 export * from "./keyword";
 export * from "./keywordMatch";
@@ -37,3 +40,12 @@ export * from "./testPhraseResult";
 export * from "./updateKeywordInput";
 export * from "./updateLeadStatusInput";
 export * from "./updateLeadStatusResult";
+export * from "./updateVoiceConfigInput";
+export * from "./voiceCall";
+export * from "./voiceCallDetail";
+export * from "./voiceCallsResponse";
+export * from "./voiceCallStats";
+export * from "./voiceConfig";
+export * from "./voiceMessage";
+export * from "./voiceOutcomeCount";
+export * from "./voiceStatusCount";
