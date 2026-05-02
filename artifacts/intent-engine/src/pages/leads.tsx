@@ -1,30 +1,85 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { LeadCard } from "@/components/lead-card";
-import { useGetLeads, useGetSources } from "@workspace/api-client-react";
+import { useGetLeads, useGetSources, useSaveLead, getGetLeadsQueryKey, getGetSavedLeadsQueryKey } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Filter, SlidersHorizontal, Download } from "lucide-react";
+import { Search, Filter, SlidersHorizontal, Download, LayoutList, X, Bookmark, CheckSquare } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { downloadLeadsCsv } from "@/lib/csv";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { Lead } from "@workspace/api-client-react/src/generated/api.schemas";
+import { cn } from "@/lib/utils";
 
 export default function LeadsExplorer() {
   const [minScore, setMinScore] = useState<number | undefined>(undefined);
   const [source, setSource] = useState<string | undefined>(undefined);
   const [subredditFilter, setSubredditFilter] = useState("");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const { data: leadsData, isLoading } = useGetLeads({ 
-    min_score: minScore, 
-    source: source === "all" ? undefined : source 
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const saveLead = useSaveLead();
+
+  const { data: leadsData, isLoading } = useGetLeads({
+    min_score: minScore,
+    source: source === "all" ? undefined : source
   });
-  
+
   const { data: sourcesData } = useGetSources();
 
   const filteredLeads = leadsData?.leads?.filter(lead => {
     if (!subredditFilter) return true;
     return lead.subreddit?.toLowerCase().includes(subredditFilter.toLowerCase());
   });
+
+  const selectedLeads = filteredLeads?.filter(l => selectedIds.has(l.id)) ?? [];
+  const allSelected = !!filteredLeads?.length && selectedIds.size === filteredLeads.length;
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredLeads?.map(l => l.id) ?? []));
+    }
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleSaveSelected = async () => {
+    const unsaved = selectedLeads.filter(l => !l.saved);
+    if (!unsaved.length) {
+      toast({ title: "Already saved", description: "All selected leads are already bookmarked." });
+      return;
+    }
+    let saved = 0;
+    for (const lead of unsaved) {
+      await new Promise<void>((resolve) => {
+        saveLead.mutate({ id: lead.id }, {
+          onSuccess: () => { saved++; resolve(); },
+          onError: () => resolve(),
+        });
+      });
+    }
+    queryClient.invalidateQueries({ queryKey: getGetLeadsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetSavedLeadsQueryKey() });
+    toast({ title: "Saved", description: `${saved} lead${saved !== 1 ? "s" : ""} added to bookmarks.` });
+    exitSelectMode();
+  };
 
   return (
     <Layout>
@@ -42,10 +97,10 @@ export default function LeadsExplorer() {
 
           <div className="flex flex-1 flex-col sm:flex-row gap-4">
             <div className="w-full sm:w-48">
-              <Input 
-                placeholder="filter by subreddit..." 
-                value={subredditFilter} 
-                onChange={(e) => setSubredditFilter(e.target.value)} 
+              <Input
+                placeholder="filter by subreddit..."
+                value={subredditFilter}
+                onChange={(e) => setSubredditFilter(e.target.value)}
                 className="font-mono text-xs h-9"
                 data-testid="input-subreddit-filter"
               />
@@ -78,24 +133,50 @@ export default function LeadsExplorer() {
               </Select>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2 ml-auto mt-4 sm:mt-0">
+
+          <div className="flex items-center gap-2 ml-auto mt-4 sm:mt-0 flex-wrap justify-end">
             <div className="flex items-center font-mono text-xs text-muted-foreground bg-muted px-3 py-1 rounded">
               <SlidersHorizontal className="h-3 w-3 mr-2" />
               {filteredLeads?.length || 0} MATCHES
             </div>
             <Button
+              variant={selectMode ? "secondary" : "outline"}
+              size="sm"
+              className="h-7 text-xs font-mono"
+              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              disabled={!filteredLeads?.length}
+            >
+              <LayoutList className="h-3 w-3 mr-1.5" />
+              {selectMode ? "CANCEL_SELECT" : "SELECT"}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               className="h-7 text-xs font-mono"
               disabled={!filteredLeads || filteredLeads.length === 0}
-              onClick={() => downloadLeadsCsv(filteredLeads!, `leads_${new Date().toISOString().slice(0,10)}.csv`)}
+              onClick={() => downloadLeadsCsv(filteredLeads!, `leads_${new Date().toISOString().slice(0, 10)}.csv`)}
             >
               <Download className="h-3 w-3 mr-1.5" />
               EXPORT_CSV
             </Button>
           </div>
         </div>
+
+        {/* select-mode sub-bar */}
+        {selectMode && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-primary/10 border border-primary/30 rounded-md text-xs font-mono">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors"
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              {allSelected ? "DESELECT_ALL" : "SELECT_ALL"}
+            </button>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-foreground">{selectedIds.size} SELECTED</span>
+            <span className="text-muted-foreground ml-auto text-[10px]">click cards to toggle</span>
+          </div>
+        )}
 
         <div className="space-y-4">
           {isLoading ? (
@@ -104,7 +185,12 @@ export default function LeadsExplorer() {
             ))
           ) : filteredLeads && filteredLeads.length > 0 ? (
             filteredLeads.map(lead => (
-              <LeadCard key={lead.id} lead={lead} />
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                selected={selectMode ? selectedIds.has(lead.id) : undefined}
+                onSelect={selectMode ? () => toggleSelect(lead.id) : undefined}
+              />
             ))
           ) : (
             <div className="p-12 border border-dashed border-border rounded-md flex flex-col items-center justify-center text-center">
@@ -117,6 +203,40 @@ export default function LeadsExplorer() {
           )}
         </div>
       </div>
+
+      {/* floating action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border shadow-2xl rounded-full px-5 py-3 font-mono text-xs animate-in slide-in-from-bottom-4 duration-200">
+          <span className="text-primary font-bold">{selectedIds.size}</span>
+          <span className="text-muted-foreground">lead{selectedIds.size !== 1 ? "s" : ""} selected</span>
+          <div className="w-px h-4 bg-border mx-1" />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs font-mono rounded-full"
+            onClick={() => downloadLeadsCsv(selectedLeads, `selected_leads_${new Date().toISOString().slice(0, 10)}.csv`)}
+          >
+            <Download className="h-3 w-3 mr-1.5" />
+            EXPORT_CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs font-mono rounded-full"
+            onClick={handleSaveSelected}
+            disabled={saveLead.isPending}
+          >
+            <Bookmark className="h-3 w-3 mr-1.5" />
+            SAVE_ALL
+          </Button>
+          <button
+            onClick={exitSelectMode}
+            className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </Layout>
   );
 }
