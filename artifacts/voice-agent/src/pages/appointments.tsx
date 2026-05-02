@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar, Phone, Clock, CheckCircle2, XCircle, AlertCircle,
-  Plus, User, X, MessageSquare, Send, Loader2,
+  Plus, User, X, MessageSquare, Send, Loader2, Bell, BellOff, Play,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ interface Appointment {
   status: string;
   externalId?: string;
   callId?: string;
+  reminderSentAt?: string | null;
   createdAt: string;
 }
 
@@ -154,14 +155,58 @@ function SmsBadge({ sending }: { sending: boolean }) {
   );
 }
 
+function ReminderBadge({ sentAt }: { sentAt: string }) {
+  const d = new Date(sentAt);
+  const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-violet-50 border-violet-200 text-violet-700" title={`Reminder sent ${label}`}>
+      <Bell className="h-2.5 w-2.5" />
+      Reminded
+    </span>
+  );
+}
+
 export default function Appointments() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [smsSending, setSmsSending] = useState<Record<string, boolean>>({});
   const [smsSent, setSmsSent] = useState<Record<string, boolean>>({});
+  const [reminderRunning, setReminderRunning] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const { data: reminderPreview } = useQuery<{
+    pendingReminders: number;
+    scheduledFor: { id: string; patientName: string; patientPhone: string; requestedDate: string; requestedTime: string }[];
+    notEligible: number;
+  }>({
+    queryKey: ["reminders-preview"],
+    queryFn: async () => {
+      const res = await fetch(`${API}/voice/reminders/preview`);
+      return res.json();
+    },
+    refetchInterval: 60000,
+  });
+
+  async function handleRunReminders() {
+    setReminderRunning(true);
+    try {
+      const res = await fetch(`${API}/voice/reminders/run`, { method: "POST" });
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["reminders-preview"] });
+      if (data.sent > 0) {
+        toast({ title: `Reminders sent!`, description: `${data.sent} reminder${data.sent > 1 ? "s" : ""} sent, ${data.skipped} skipped.` });
+      } else {
+        toast({ title: "No reminders sent", description: `${data.skipped} appointment${data.skipped !== 1 ? "s" : ""} not eligible (need ISO date set to tomorrow).` });
+      }
+    } catch {
+      toast({ title: "Reminder job failed", variant: "destructive" });
+    } finally {
+      setReminderRunning(false);
+    }
+  }
 
   const { data, isLoading } = useQuery<AppointmentsResponse>({
     queryKey: ["appointments", statusFilter, page],
@@ -240,10 +285,46 @@ export default function Appointments() {
             Requests booked by the AI agent — confirm, cancel, or send SMS reminders
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)} size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" /> New Appointment
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-violet-600 border-violet-200 hover:bg-violet-50"
+            onClick={handleRunReminders}
+            disabled={reminderRunning}
+            title="Send 24-hour reminder SMS to all appointments scheduled for tomorrow"
+          >
+            {reminderRunning
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Bell className="h-3.5 w-3.5" />
+            }
+            Run Reminders
+            {reminderPreview && reminderPreview.pendingReminders > 0 && (
+              <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                {reminderPreview.pendingReminders}
+              </span>
+            )}
+          </Button>
+          <Button onClick={() => setShowCreate(true)} size="sm" className="gap-1.5">
+            <Plus className="h-4 w-4" /> New Appointment
+          </Button>
+        </div>
       </div>
+
+      {/* Reminder info banner */}
+      {reminderPreview && reminderPreview.pendingReminders > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+          <Bell className="h-4 w-4 text-violet-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-violet-900">
+              {reminderPreview.pendingReminders} appointment{reminderPreview.pendingReminders !== 1 ? "s" : ""} due for a reminder tomorrow
+            </p>
+            <p className="text-xs text-violet-700 mt-0.5">
+              {reminderPreview.scheduledFor.map((a) => a.patientName).join(", ")} — reminders run automatically every hour, or click "Run Reminders" to send now.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -317,6 +398,7 @@ export default function Appointments() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{appt.patientName}</span>
                       <StatusBadge status={appt.status} />
+                      {appt.reminderSentAt && <ReminderBadge sentAt={appt.reminderSentAt} />}
                       {smsSent[appt.id] && <SmsBadge sending={false} />}
                       {smsSending[appt.id] && <SmsBadge sending={true} />}
                       {appt.externalId && (

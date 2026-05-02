@@ -58,6 +58,7 @@ export const voiceAppointments = pgTable("voice_appointments", {
   status: text("status").notNull().default("pending"),
   externalId: text("external_id"),
   externalData: text("external_data"),
+  reminderSentAt: timestamp("reminder_sent_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
