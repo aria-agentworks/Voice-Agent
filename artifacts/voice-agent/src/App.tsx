@@ -9,6 +9,8 @@ import CallDetail from "@/pages/call-detail";
 import Outbound from "@/pages/outbound";
 import Configure from "@/pages/configure";
 import Settings from "@/pages/settings";
+import Appointments from "@/pages/appointments";
+import Integrations from "@/pages/integrations";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -28,6 +30,8 @@ function Router() {
         <Route path="/calls" component={Calls} />
         <Route path="/calls/:id" component={CallDetail} />
         <Route path="/outbound" component={Outbound} />
+        <Route path="/appointments" component={Appointments} />
+        <Route path="/integrations" component={Integrations} />
         <Route path="/configure" component={Configure} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />

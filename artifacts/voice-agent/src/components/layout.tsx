@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, PhoneCall, PhoneOutgoing, Settings2, Settings,
-  Menu, X, Activity
+  Menu, X, Activity, CalendarDays, Plug2,
 } from "lucide-react";
 import { useState } from "react";
 import { useGetVoiceAnalytics } from "@workspace/api-client-react";
@@ -10,7 +10,9 @@ import { useGetVoiceAnalytics } from "@workspace/api-client-react";
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calls", label: "Call Logs", icon: PhoneCall },
+  { href: "/appointments", label: "Appointments", icon: CalendarDays },
   { href: "/outbound", label: "Outbound", icon: PhoneOutgoing },
+  { href: "/integrations", label: "Integrations", icon: Plug2 },
   { href: "/configure", label: "Configure", icon: Settings2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -52,7 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? location === "/" : location.startsWith(href);
             const showMissed = href === "/calls" && missedToday > 0;

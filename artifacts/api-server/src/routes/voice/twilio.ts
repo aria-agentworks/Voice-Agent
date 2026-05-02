@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { voiceCalls, voiceMessages, voiceConfigs } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { generateVoiceResponse, isWithinBusinessHours, getBusinessHoursSummary } from "./gpt.js";
+import { voiceCalls, voiceMessages, voiceConfigs, voiceAppointments, voiceWebhookActions } from "@workspace/db";
+import { eq, and, ilike, or } from "drizzle-orm";
+import { generateVoiceResponseWithFunctions, isWithinBusinessHours, getBusinessHoursSummary } from "./gpt.js";
+import { callWebhookAction } from "./integrations.js";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
@@ -39,6 +40,138 @@ function getBaseUrl(req: { headers: Record<string, string | string[] | undefined
   return `${proto}://${resolvedHost}`;
 }
 
+async function executeToolCall(
+  toolName: string,
+  args: Record<string, unknown>,
+  callId: string,
+  fromNumber: string,
+  logger: { error: (obj: object, msg: string) => void }
+): Promise<string> {
+  try {
+    // Check for a configured webhook action first
+    const webhookAction = await db.query.voiceWebhookActions.findFirst({
+      where: and(
+        eq(voiceWebhookActions.actionType, toolName),
+        eq(voiceWebhookActions.isActive, true)
+      ),
+    });
+
+    if (webhookAction) {
+      try {
+        const result = await callWebhookAction(webhookAction, { ...args, callId });
+        return result;
+      } catch (err) {
+        logger.error({ err }, `Webhook action failed for ${toolName}, falling back to internal`);
+      }
+    }
+
+    // Internal fallback logic
+    switch (toolName) {
+      case "book_appointment": {
+        const { patientName, patientPhone, requestedDate, requestedTime, reason } = args as Record<string, string>;
+        if (!patientName) return JSON.stringify({ success: false, message: "Patient name is required to book an appointment." });
+
+        const [appointment] = await db.insert(voiceAppointments).values({
+          callId,
+          patientName: patientName || "Unknown",
+          patientPhone: patientPhone || fromNumber || "",
+          requestedDate: requestedDate || "",
+          requestedTime: requestedTime || "",
+          reason: reason || "",
+          status: "pending",
+        }).returning();
+
+        return JSON.stringify({
+          success: true,
+          appointmentId: appointment.id,
+          message: `Appointment request saved for ${patientName}${requestedDate ? ` on ${requestedDate}` : ""}${requestedTime ? ` at ${requestedTime}` : ""}. Our staff will confirm shortly.`,
+        });
+      }
+
+      case "check_availability": {
+        const { requestedDate, requestedTime } = args as Record<string, string>;
+        return JSON.stringify({
+          success: true,
+          available: true,
+          message: `We have availability${requestedDate ? ` on ${requestedDate}` : ""}${requestedTime ? ` around ${requestedTime}` : ""}. Would you like to book that time?`,
+          slots: ["9:00 AM", "10:30 AM", "2:00 PM", "3:30 PM"],
+        });
+      }
+
+      case "cancel_appointment": {
+        const { patientName, patientPhone, requestedDate } = args as Record<string, string>;
+        // Try to find and cancel the appointment
+        const searchPhone = patientPhone || fromNumber;
+        const existingAppts = await db.query.voiceAppointments.findMany({
+          where: and(
+            ilike(voiceAppointments.patientName, `%${patientName || ""}%`),
+          ),
+          orderBy: (a, { desc }) => [desc(a.createdAt)],
+          limit: 5,
+        });
+
+        const toCancel = requestedDate
+          ? existingAppts.find((a) => a.requestedDate?.includes(requestedDate))
+          : existingAppts[0];
+
+        if (toCancel) {
+          await db.update(voiceAppointments)
+            .set({ status: "cancelled", updatedAt: new Date() })
+            .where(eq(voiceAppointments.id, toCancel.id));
+          return JSON.stringify({
+            success: true,
+            message: `Appointment cancelled for ${patientName}${toCancel.requestedDate ? ` on ${toCancel.requestedDate}` : ""}.`,
+          });
+        }
+
+        return JSON.stringify({
+          success: false,
+          message: `No appointment found for ${patientName || "that name"}. Please call back during business hours to cancel.`,
+        });
+      }
+
+      case "lookup_patient": {
+        const { patientName, patientPhone } = args as Record<string, string>;
+        const searchPhone = patientPhone || fromNumber;
+
+        const appointments = await db.query.voiceAppointments.findMany({
+          where: or(
+            patientName ? ilike(voiceAppointments.patientName, `%${patientName}%`) : undefined,
+            searchPhone ? ilike(voiceAppointments.patientPhone, `%${searchPhone}%`) : undefined,
+          ),
+          orderBy: (a, { desc }) => [desc(a.createdAt)],
+          limit: 3,
+        });
+
+        if (appointments.length === 0) {
+          return JSON.stringify({
+            found: false,
+            message: "No records found for that patient.",
+          });
+        }
+
+        const appt = appointments[0]!;
+        return JSON.stringify({
+          found: true,
+          message: `Found record for ${appt.patientName}.${appt.requestedDate ? ` Next appointment: ${appt.requestedDate}${appt.requestedTime ? ` at ${appt.requestedTime}` : ""}` : ""} Status: ${appt.status}.`,
+          appointments: appointments.map((a) => ({
+            date: a.requestedDate,
+            time: a.requestedTime,
+            reason: a.reason,
+            status: a.status,
+          })),
+        });
+      }
+
+      default:
+        return JSON.stringify({ message: "Action completed." });
+    }
+  } catch (err) {
+    logger.error({ err }, `Tool execution failed: ${toolName}`);
+    return JSON.stringify({ success: false, message: "I'm having trouble accessing that information right now." });
+  }
+}
+
 router.post("/voice/inbound", async (req, res) => {
   const { CallSid, From, To } = req.body as Record<string, string>;
   res.setHeader("Content-Type", "text/xml");
@@ -48,9 +181,7 @@ router.post("/voice/inbound", async (req, res) => {
 
     if (!config) {
       return res.send(
-        twiml(
-          `<Say voice="Polly.Joanna-Neural">Sorry, this service is not configured. Goodbye.</Say><Hangup/>`
-        )
+        twiml(`<Say voice="Polly.Joanna-Neural">Sorry, this service is not configured. Goodbye.</Say><Hangup/>`)
       );
     }
 
@@ -68,7 +199,6 @@ router.post("/voice/inbound", async (req, res) => {
       });
     }
 
-    // After-hours handling
     if (config.hoursJson && !isWithinBusinessHours(config.hoursJson, config.timezone)) {
       const hoursSummary = getBusinessHoursSummary(config.hoursJson);
       const afterHoursMsg = `Thank you for calling ${config.businessName}. We are currently closed. Our hours are ${hoursSummary}. Please call back during business hours or leave a message after the tone.`;
@@ -82,16 +212,12 @@ router.post("/voice/inbound", async (req, res) => {
       );
     }
 
-    const greeting =
-      config.greeting || `Thank you for calling ${config.businessName}. How can I help you today?`;
-
+    const greeting = config.greeting || `Thank you for calling ${config.businessName}. How can I help you today?`;
     return res.send(gatherTwiml("/api/voice/gather", greeting));
   } catch (err) {
     req.log.error({ err }, "Error handling inbound call");
     return res.send(
-      twiml(
-        `<Say voice="Polly.Joanna-Neural">We are experiencing technical difficulties. Please try again later.</Say><Hangup/>`
-      )
+      twiml(`<Say voice="Polly.Joanna-Neural">We are experiencing technical difficulties. Please try again later.</Say><Hangup/>`)
     );
   }
 });
@@ -145,7 +271,14 @@ router.post("/voice/gather", async (req, res) => {
       content: m.content,
     }));
 
-    const aiResponse = await generateVoiceResponse(SpeechResult.trim(), config, history);
+    const aiResponse = await generateVoiceResponseWithFunctions(
+      SpeechResult.trim(),
+      config,
+      history,
+      async (toolName, args) => {
+        return executeToolCall(toolName, args, call.id, call.fromNumber, req.log);
+      }
+    );
 
     await db.insert(voiceMessages).values({
       callId: call.id,
@@ -165,9 +298,7 @@ router.post("/voice/gather", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Error handling gather");
     return res.send(
-      twiml(
-        `<Say voice="Polly.Joanna-Neural">I am having trouble right now. Please try again shortly.</Say><Hangup/>`
-      )
+      twiml(`<Say voice="Polly.Joanna-Neural">I am having trouble right now. Please try again shortly.</Say><Hangup/>`)
     );
   }
 });
@@ -180,9 +311,7 @@ router.post("/voice/outbound-twiml", async (req, res) => {
     const config = await db.query.voiceConfigs.findFirst();
     if (!config) {
       return res.send(
-        twiml(
-          `<Say voice="Polly.Joanna-Neural">Hello, this is an automated call. Thank you. Goodbye.</Say><Hangup/>`
-        )
+        twiml(`<Say voice="Polly.Joanna-Neural">Hello, this is an automated call. Thank you. Goodbye.</Say><Hangup/>`)
       );
     }
 
@@ -205,9 +334,7 @@ router.post("/voice/outbound-twiml", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Error in outbound TwiML");
     return res.send(
-      twiml(
-        `<Say voice="Polly.Joanna-Neural">Hello, this is an automated call. Thank you. Goodbye.</Say><Hangup/>`
-      )
+      twiml(`<Say voice="Polly.Joanna-Neural">Hello, this is an automated call. Thank you. Goodbye.</Say><Hangup/>`)
     );
   }
 });
@@ -242,10 +369,7 @@ async function autoSummarizeCall(callId: string, logger: { error: (obj: object, 
     if (parsed.summary || parsed.outcome) {
       await db
         .update(voiceCalls)
-        .set({
-          summary: parsed.summary ?? undefined,
-          outcome: parsed.outcome ?? undefined,
-        })
+        .set({ summary: parsed.summary ?? undefined, outcome: parsed.outcome ?? undefined })
         .where(eq(voiceCalls.id, callId));
     }
   } catch (err) {
@@ -262,9 +386,7 @@ router.post("/voice/status", async (req, res) => {
     });
 
     if (call) {
-      const isTerminal = ["completed", "failed", "busy", "no-answer", "canceled"].includes(
-        CallStatus
-      );
+      const isTerminal = ["completed", "failed", "busy", "no-answer", "canceled"].includes(CallStatus);
       await db
         .update(voiceCalls)
         .set({

@@ -46,6 +46,38 @@ export const voiceMessages = pgTable("voice_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const voiceAppointments = pgTable("voice_appointments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  callId: uuid("call_id").references(() => voiceCalls.id, { onDelete: "set null" }),
+  patientName: text("patient_name").notNull(),
+  patientPhone: text("patient_phone").notNull().default(""),
+  requestedDate: text("requested_date").notNull().default(""),
+  requestedTime: text("requested_time").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("pending"),
+  externalId: text("external_id"),
+  externalData: text("external_data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const voiceWebhookActions = pgTable("voice_webhook_actions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actionType: text("action_type").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  method: text("method").notNull().default("POST"),
+  url: text("url").notNull(),
+  headersJson: text("headers_json").notNull().default("{}"),
+  bodyTemplate: text("body_template").notNull().default(""),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export type VoiceConfig = typeof voiceConfigs.$inferSelect;
 export type VoiceCall = typeof voiceCalls.$inferSelect;
 export type VoiceMessage = typeof voiceMessages.$inferSelect;
+export type VoiceAppointment = typeof voiceAppointments.$inferSelect;
+export type VoiceWebhookAction = typeof voiceWebhookActions.$inferSelect;
