@@ -2,7 +2,6 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { voiceCalls, voiceMessages, voiceConfigs } from "@workspace/db";
 import { eq, desc, count, sql, isNotNull, and } from "drizzle-orm";
-import { textToSpeech } from "@workspace/integrations-openai-ai-server/audio";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
@@ -258,7 +257,14 @@ router.get("/voice/tts/:messageId", async (req, res) => {
     const voice =
       (config?.voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova";
 
-    const audioBuffer = await textToSpeech(message.content, voice, "mp3");
+    const mp3Response = await openai.audio.speech.create({
+      model: "tts-1",
+      voice,
+      input: message.content,
+      response_format: "mp3",
+    });
+
+    const audioBuffer = Buffer.from(await mp3Response.arrayBuffer());
 
     await db
       .update(voiceMessages)

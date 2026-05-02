@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, Copy, Check, AlertTriangle, ExternalLink } from "lucide-react";
+import { CheckCircle2, Copy, Check, AlertTriangle, ExternalLink, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function CopyButton({ text }: { text: string }) {
@@ -26,6 +26,53 @@ function CopyButton({ text }: { text: string }) {
       {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
   );
+}
+
+type HourEntry = { open: string; close: string; closed: boolean };
+
+function isCurrentlyOpen(hoursJson: string | null | undefined): boolean {
+  if (!hoursJson) return false;
+  try {
+    const hours: Record<string, HourEntry> = JSON.parse(hoursJson);
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(now);
+    const weekday = parts.find((p) => p.type === "weekday")?.value?.toLowerCase() ?? "";
+    const h = parts.find((p) => p.type === "hour")?.value ?? "0";
+    const m = parts.find((p) => p.type === "minute")?.value ?? "0";
+    const current = parseInt(h) * 60 + parseInt(m);
+    const entry = hours[weekday];
+    if (!entry || entry.closed) return false;
+    const [openH, openM] = entry.open.split(":").map(Number);
+    const [closeH, closeM] = entry.close.split(":").map(Number);
+    return current >= openH * 60 + openM && current < closeH * 60 + closeM;
+  } catch {
+    return false;
+  }
+}
+
+function getCurrentDayHours(hoursJson: string | null | undefined): string {
+  if (!hoursJson) return "";
+  try {
+    const hours: Record<string, HourEntry> = JSON.parse(hoursJson);
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "long",
+    });
+    const weekday = fmt.format(now).toLowerCase();
+    const entry = hours[weekday];
+    if (!entry || entry.closed) return "Closed today";
+    return `${entry.open} – ${entry.close} ET`;
+  } catch {
+    return "";
+  }
 }
 
 export default function Settings() {
@@ -80,6 +127,8 @@ export default function Settings() {
 
   const webhookUrl = config?.webhookUrl ?? "";
   const isMissingCredentials = !config?.twilioAccountSid || !config?.twilioPhoneNumber;
+  const open = isCurrentlyOpen(config?.hoursJson);
+  const todayHours = getCurrentDayHours(config?.hoursJson);
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
@@ -130,13 +179,15 @@ export default function Settings() {
 
           <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">
             <ExternalLink className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground">Setup instructions</p>
+            <div className="text-xs text-muted-foreground space-y-1 flex-1">
+              <p className="font-medium text-foreground">Twilio Console Setup</p>
               <ol className="list-decimal list-inside space-y-0.5">
-                <li>Save your Twilio credentials below</li>
-                <li>Go to your Twilio console → Phone Numbers → Active numbers</li>
-                <li>Select your phone number</li>
-                <li>Under "Voice Configuration" → set webhook to the URL above (HTTP POST)</li>
+                <li>Go to <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Twilio Console → Phone Numbers → Active Numbers</a></li>
+                <li>Click your number (<span className="font-mono">{config?.twilioPhoneNumber || "your number"}</span>)</li>
+                <li>Under <strong>Voice Configuration</strong> → "A call comes in"</li>
+                <li>Set to <strong>Webhook</strong> → paste the URL above → <strong>HTTP POST</strong></li>
+                <li>Also set <strong>Call Status Changes</strong> to the same URL with <code className="bg-muted px-1 rounded">/status</code> suffix</li>
+                <li>Click <strong>Save Configuration</strong></li>
               </ol>
             </div>
           </div>
@@ -186,6 +237,7 @@ export default function Settings() {
                 placeholder="+15550001234"
                 className="font-mono text-sm"
               />
+              <p className="text-xs text-muted-foreground">Include country code, e.g. +12602335208</p>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3.5">
@@ -217,6 +269,9 @@ export default function Settings() {
               {
                 label: "Twilio Account SID",
                 ok: !!config?.twilioAccountSid,
+                detail: config?.twilioAccountSid
+                  ? config.twilioAccountSid.slice(0, 8) + "..."
+                  : undefined,
               },
               {
                 label: "Twilio Auth Token",
@@ -225,23 +280,57 @@ export default function Settings() {
               {
                 label: "Twilio Phone Number",
                 ok: !!config?.twilioPhoneNumber,
+                detail: config?.twilioPhoneNumber ?? undefined,
               },
               {
                 label: "Voice Agent",
                 ok: config?.isActive,
               },
-            ].map(({ label, ok }) => (
+            ].map(({ label, ok, detail }) => (
               <div key={label} className="flex items-center justify-between">
                 <span className="text-muted-foreground">{label}</span>
-                <span className={cn(
-                  "inline-flex items-center gap-1.5 text-xs font-medium",
-                  ok ? "text-emerald-600" : "text-amber-600"
-                )}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", ok ? "bg-emerald-500" : "bg-amber-400")} />
-                  {ok ? "Configured" : "Not set"}
-                </span>
+                <div className="flex items-center gap-2">
+                  {detail && <span className="text-xs font-mono text-muted-foreground">{detail}</span>}
+                  <span className={cn(
+                    "inline-flex items-center gap-1.5 text-xs font-medium",
+                    ok ? "text-emerald-600" : "text-amber-600"
+                  )}>
+                    <span className={cn("h-1.5 w-1.5 rounded-full", ok ? "bg-emerald-500" : "bg-amber-400")} />
+                    {ok ? "Configured" : "Not set"}
+                  </span>
+                </div>
               </div>
             ))}
+
+            <div className="border-t border-border pt-2.5 mt-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>Answering calls right now</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {todayHours && (
+                    <span className="text-xs text-muted-foreground">{todayHours}</span>
+                  )}
+                  <span className={cn(
+                    "inline-flex items-center gap-1.5 text-xs font-medium",
+                    open ? "text-emerald-600" : "text-slate-500"
+                  )}>
+                    <span className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      open ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                    )} />
+                    {open ? "Open" : "Outside hours"}
+                  </span>
+                </div>
+              </div>
+              {!open && config?.hoursJson && (
+                <p className="text-xs text-muted-foreground mt-1.5 pl-5">
+                  Callers will hear an after-hours message. Update business hours in{" "}
+                  <a href="/voice-agent/configure" className="text-primary underline underline-offset-2">Configure</a>.
+                </p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

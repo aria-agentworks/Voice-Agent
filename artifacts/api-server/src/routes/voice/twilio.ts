@@ -32,8 +32,11 @@ function gatherTwiml(action: string, sayText: string): string {
 
 function getBaseUrl(req: { headers: Record<string, string | string[] | undefined> }): string {
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
-  const host = (req.headers["x-forwarded-host"] as string) || (req.headers["host"] as string);
-  return `${proto}://${host}`;
+  const forwardedHost = req.headers["x-forwarded-host"] as string;
+  const host = req.headers["host"] as string;
+  const replitDomain = process.env.REPLIT_DOMAINS?.split(",")[0];
+  const resolvedHost = forwardedHost || replitDomain || host;
+  return `${proto}://${resolvedHost}`;
 }
 
 router.post("/voice/inbound", async (req, res) => {
@@ -144,22 +147,15 @@ router.post("/voice/gather", async (req, res) => {
 
     const aiResponse = await generateVoiceResponse(SpeechResult.trim(), config, history);
 
-    const [savedMessage] = await db
-      .insert(voiceMessages)
-      .values({
-        callId: call.id,
-        role: "assistant",
-        content: aiResponse,
-        audioReady: false,
-      })
-      .returning();
-
-    const baseUrl = getBaseUrl(req);
-    const ttsUrl = `${baseUrl}/api/voice/tts/${savedMessage.id}`;
+    await db.insert(voiceMessages).values({
+      callId: call.id,
+      role: "assistant",
+      content: aiResponse,
+    });
 
     return res.send(
       twiml(`
-      <Play>${ttsUrl}</Play>
+      <Say voice="Polly.Joanna-Neural">${xmlSafe(aiResponse)}</Say>
       <Gather input="speech" action="/api/voice/gather" method="POST" speechTimeout="3" timeout="10" language="en-US">
       </Gather>
       <Say voice="Polly.Joanna-Neural">Thank you for calling ${xmlSafe(config.businessName)}. Goodbye!</Say>
