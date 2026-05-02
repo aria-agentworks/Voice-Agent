@@ -5,7 +5,10 @@
  * Intent Engine API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Lead } from "./lead";
 
-export interface HealthStatus {
-  status: string;
+export interface LeadsResponse {
+  leads: Lead[];
+  total: number;
+  fetched_at: string;
 }

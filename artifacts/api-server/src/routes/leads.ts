@@ -1,0 +1,211 @@
+import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
+import { db, savedLeadsTable } from "@workspace/db";
+import {
+  GetLeadsQueryParams,
+  GetLeadsResponse,
+  GetLeadsStatsResponse,
+  GetSavedLeadsResponse,
+  SaveLeadParams,
+  SaveLeadResponse,
+  GenerateResponseParams,
+  GenerateResponseResponse,
+  GetSourcesResponse,
+} from "@workspace/api-zod";
+import { fetchRedditLeads, getExampleLeads } from "../lib/reddit";
+import { generateResponse } from "../lib/responder";
+
+const router: IRouter = Router();
+
+let cachedLeads: Awaited<ReturnType<typeof fetchRedditLeads>> = [];
+let lastFetchedAt: Date | null = null;
+
+async function getLeads() {
+  const now = new Date();
+  const stale = !lastFetchedAt || now.getTime() - lastFetchedAt.getTime() > 5 * 60 * 1000;
+
+  if (stale) {
+    try {
+      const live = await fetchRedditLeads();
+      if (live.length > 0) {
+        cachedLeads = live;
+      } else {
+        cachedLeads = getExampleLeads();
+      }
+    } catch {
+      cachedLeads = getExampleLeads();
+    }
+    lastFetchedAt = now;
+  }
+
+  const savedIds = new Set<string>();
+  try {
+    const saved = await db.select({ id: savedLeadsTable.id }).from(savedLeadsTable);
+    saved.forEach((s) => savedIds.add(s.id));
+  } catch {
+    // DB might not be ready yet
+  }
+
+  return cachedLeads.map((l) => ({ ...l, saved: savedIds.has(l.id) }));
+}
+
+router.get("/leads", async (req, res): Promise<void> => {
+  const query = GetLeadsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+
+  const { min_score = 0, source, limit = 50 } = query.data;
+  let leads = await getLeads();
+
+  if (min_score > 0) {
+    leads = leads.filter((l) => l.intent_score >= min_score);
+  }
+  if (source) {
+    leads = leads.filter((l) => l.source === source);
+  }
+
+  leads = leads.slice(0, limit);
+
+  res.json(
+    GetLeadsResponse.parse({
+      leads,
+      total: leads.length,
+      fetched_at: lastFetchedAt?.toISOString() ?? new Date().toISOString(),
+    })
+  );
+});
+
+router.get("/leads/stats", async (_req, res): Promise<void> => {
+  const leads = await getLeads();
+
+  const high = leads.filter((l) => l.intent_score >= 8).length;
+  const medium = leads.filter((l) => l.intent_score >= 5 && l.intent_score < 8).length;
+  const low = leads.filter((l) => l.intent_score < 5).length;
+
+  const bySourceMap = new Map<string, number>();
+  for (const l of leads) {
+    bySourceMap.set(l.source, (bySourceMap.get(l.source) ?? 0) + 1);
+  }
+
+  const savedRows = await db.select().from(savedLeadsTable);
+  const avgScore = leads.length > 0
+    ? leads.reduce((acc, l) => acc + l.intent_score, 0) / leads.length
+    : 0;
+
+  res.json(
+    GetLeadsStatsResponse.parse({
+      total_leads: leads.length,
+      high_intent: high,
+      medium_intent: medium,
+      low_intent: low,
+      saved_count: savedRows.length,
+      by_source: Array.from(bySourceMap.entries()).map(([source, count]) => ({ source, count })),
+      avg_score: Math.round(avgScore * 10) / 10,
+      last_run: lastFetchedAt?.toISOString() ?? null,
+    })
+  );
+});
+
+router.get("/leads/saved", async (_req, res): Promise<void> => {
+  const savedRows = await db.select().from(savedLeadsTable);
+
+  const leads = savedRows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    text: row.text,
+    url: row.url ?? null,
+    contact: row.contact ?? null,
+    intent_score: parseInt(row.intentScore, 10),
+    intent_label: row.intentLabel,
+    subreddit: row.subreddit ?? null,
+    author: row.author ?? null,
+    created_at: row.createdAt.toISOString(),
+    saved: true,
+  }));
+
+  res.json(
+    GetSavedLeadsResponse.parse({
+      leads,
+      total: leads.length,
+      fetched_at: new Date().toISOString(),
+    })
+  );
+});
+
+router.post("/leads/:id/save", async (req, res): Promise<void> => {
+  const params = SaveLeadParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const { id } = params.data;
+  const existing = await db
+    .select()
+    .from(savedLeadsTable)
+    .where(eq(savedLeadsTable.id, id));
+
+  if (existing.length > 0) {
+    // Already saved — unsave it
+    await db.delete(savedLeadsTable).where(eq(savedLeadsTable.id, id));
+    res.json(SaveLeadResponse.parse({ saved: false, lead_id: id }));
+    return;
+  }
+
+  // Find the lead in cached leads and save it
+  const lead = cachedLeads.find((l) => l.id === id);
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  await db.insert(savedLeadsTable).values({
+    id: lead.id,
+    source: lead.source,
+    text: lead.text,
+    url: lead.url ?? null,
+    contact: lead.contact ?? null,
+    intentScore: String(lead.intent_score),
+    intentLabel: lead.intent_label,
+    subreddit: lead.subreddit ?? null,
+    author: lead.author ?? null,
+    saved: true,
+    createdAt: new Date(lead.created_at),
+  });
+
+  res.json(SaveLeadResponse.parse({ saved: true, lead_id: id }));
+});
+
+router.post("/leads/:id/respond", async (req, res): Promise<void> => {
+  const params = GenerateResponseParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const { id } = params.data;
+  const lead = cachedLeads.find((l) => l.id === id);
+
+  if (!lead) {
+    // Try to find in saved leads
+    const [saved] = await db.select().from(savedLeadsTable).where(eq(savedLeadsTable.id, id));
+    if (!saved) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const message = generateResponse(saved.text, saved.source);
+    res.json(GenerateResponseResponse.parse({ message, lead_id: id }));
+    return;
+  }
+
+  const message = generateResponse(lead.text, lead.source);
+  res.json(GenerateResponseResponse.parse({ message, lead_id: id }));
+});
+
+router.get("/sources", async (_req, res): Promise<void> => {
+  res.json(GetSourcesResponse.parse({ sources: ["reddit"] }));
+});
+
+export default router;

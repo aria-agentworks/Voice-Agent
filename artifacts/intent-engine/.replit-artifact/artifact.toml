@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Intent Engine"
+version = "1.0.0"
+id = "artifacts/intent-engine"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24225
+
+[services.development]
+run = "pnpm --filter @workspace/intent-engine run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/intent-engine", "run", "build" ]
+publicDir = "artifacts/intent-engine/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24225"
+BASE_PATH = "/"

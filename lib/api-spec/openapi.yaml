@@ -3,13 +3,18 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Intent Engine API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: leads
+    description: Lead fetching, scoring, and management
+  - name: stats
+    description: Dashboard statistics
+
 paths:
   /healthz:
     get:
@@ -24,6 +29,121 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /leads:
+    get:
+      operationId: getLeads
+      tags: [leads]
+      summary: Fetch and score leads
+      description: Fetch leads from all connectors, score them, and return filtered results
+      parameters:
+        - name: min_score
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of scored leads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsResponse"
+
+  /leads/stats:
+    get:
+      operationId: getLeadsStats
+      tags: [stats]
+      summary: Get lead statistics
+      description: Summary statistics for the intent engine dashboard
+      responses:
+        "200":
+          description: Lead statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsStats"
+
+  /leads/saved:
+    get:
+      operationId: getSavedLeads
+      tags: [leads]
+      summary: Get saved leads
+      description: Returns leads that have been saved/bookmarked
+      responses:
+        "200":
+          description: Saved leads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsResponse"
+
+  /leads/{id}/save:
+    post:
+      operationId: saveLead
+      tags: [leads]
+      summary: Save a lead
+      description: Save or unsave a lead by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Save status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveLeadResult"
+
+  /leads/{id}/respond:
+    post:
+      operationId: generateResponse
+      tags: [leads]
+      summary: Generate outreach response
+      description: Generate an AI-style outreach message for a specific lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Generated response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedResponse"
+
+  /sources:
+    get:
+      operationId: getSources
+      tags: [leads]
+      summary: Get available sources
+      description: List all configured lead sources
+      responses:
+        "200":
+          description: Available sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourcesResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +154,130 @@ components:
       required:
         - status
 
+    Lead:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        text:
+          type: string
+        url:
+          type: string
+          nullable: true
+        contact:
+          type: string
+          nullable: true
+        intent_score:
+          type: integer
+        intent_label:
+          type: string
+        subreddit:
+          type: string
+          nullable: true
+        author:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        saved:
+          type: boolean
+      required:
+        - id
+        - source
+        - text
+        - intent_score
+        - intent_label
+        - created_at
+        - saved
+
+    LeadsResponse:
+      type: object
+      properties:
+        leads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lead"
+        total:
+          type: integer
+        fetched_at:
+          type: string
+      required:
+        - leads
+        - total
+        - fetched_at
+
+    LeadsStats:
+      type: object
+      properties:
+        total_leads:
+          type: integer
+        high_intent:
+          type: integer
+        medium_intent:
+          type: integer
+        low_intent:
+          type: integer
+        saved_count:
+          type: integer
+        by_source:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceCount"
+        avg_score:
+          type: number
+        last_run:
+          type: string
+          nullable: true
+      required:
+        - total_leads
+        - high_intent
+        - medium_intent
+        - low_intent
+        - saved_count
+        - by_source
+        - avg_score
+
+    SourceCount:
+      type: object
+      properties:
+        source:
+          type: string
+        count:
+          type: integer
+      required:
+        - source
+        - count
+
+    GeneratedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        lead_id:
+          type: string
+      required:
+        - message
+        - lead_id
+
+    SaveLeadResult:
+      type: object
+      properties:
+        saved:
+          type: boolean
+        lead_id:
+          type: string
+      required:
+        - saved
+        - lead_id
+
+    SourcesResponse:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            type: string
+      required:
+        - sources
