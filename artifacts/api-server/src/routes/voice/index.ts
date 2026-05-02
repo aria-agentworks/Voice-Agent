@@ -6,6 +6,7 @@ import analyticsRouter from "./analytics.js";
 import appointmentsRouter from "./appointments.js";
 import integrationsRouter from "./integrations.js";
 import remindersRouter from "./reminders.js";
+import campaignsRouter from "./campaigns.js";
 
 const router = Router();
 
@@ -13,6 +14,7 @@ router.use(analyticsRouter);
 router.use(appointmentsRouter);
 router.use(integrationsRouter);
 router.use(remindersRouter);
+router.use(campaignsRouter);
 router.use(twilioRouter);
 router.use(configRouter);
 router.use(callsRouter);

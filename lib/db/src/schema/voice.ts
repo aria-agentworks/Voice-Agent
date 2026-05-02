@@ -63,6 +63,32 @@ export const voiceAppointments = pgTable("voice_appointments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const voiceCampaigns = pgTable("voice_campaigns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  status: text("status").notNull().default("draft"), // draft | running | paused | completed
+  purpose: text("purpose").notNull().default(""),
+  totalContacts: integer("total_contacts").notNull().default(0),
+  calledCount: integer("called_count").notNull().default(0),
+  completedCount: integer("completed_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const voiceCampaignContacts = pgTable("voice_campaign_contacts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  campaignId: uuid("campaign_id").references(() => voiceCampaigns.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("pending"), // pending | calling | completed | failed | no-answer | skipped
+  callSid: text("call_sid"),
+  calledAt: timestamp("called_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const voiceWebhookActions = pgTable("voice_webhook_actions", {
   id: uuid("id").primaryKey().defaultRandom(),
   actionType: text("action_type").notNull(),
@@ -82,3 +108,5 @@ export type VoiceCall = typeof voiceCalls.$inferSelect;
 export type VoiceMessage = typeof voiceMessages.$inferSelect;
 export type VoiceAppointment = typeof voiceAppointments.$inferSelect;
 export type VoiceWebhookAction = typeof voiceWebhookActions.$inferSelect;
+export type VoiceCampaign = typeof voiceCampaigns.$inferSelect;
+export type VoiceCampaignContact = typeof voiceCampaignContacts.$inferSelect;
