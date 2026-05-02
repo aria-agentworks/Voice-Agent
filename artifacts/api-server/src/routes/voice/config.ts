@@ -6,20 +6,19 @@ import { eq } from "drizzle-orm";
 const router = Router();
 
 const DEFAULT_HOURS = JSON.stringify({
-  monday: "9:00 AM - 5:00 PM",
-  tuesday: "9:00 AM - 5:00 PM",
-  wednesday: "9:00 AM - 5:00 PM",
-  thursday: "9:00 AM - 5:00 PM",
-  friday: "9:00 AM - 5:00 PM",
-  saturday: "Closed",
-  sunday: "Closed",
+  monday: { open: "09:00", close: "17:00", closed: false },
+  tuesday: { open: "09:00", close: "17:00", closed: false },
+  wednesday: { open: "09:00", close: "17:00", closed: false },
+  thursday: { open: "09:00", close: "17:00", closed: false },
+  friday: { open: "09:00", close: "17:00", closed: false },
+  saturday: { open: "09:00", close: "13:00", closed: true },
+  sunday: { open: "09:00", close: "13:00", closed: true },
 });
 
 function getBaseUrl(req: { headers: Record<string, string | string[] | undefined> }): string {
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
   const forwardedHost = req.headers["x-forwarded-host"] as string;
   const host = req.headers["host"] as string;
-  // Prefer the forwarded host; fall back to REPLIT_DOMAINS so the webhook URL is always correct
   const replitDomain = process.env.REPLIT_DOMAINS?.split(",")[0];
   const resolvedHost = forwardedHost || replitDomain || host;
   return `${proto}://${resolvedHost}`;
@@ -32,6 +31,46 @@ function maskConfig(config: typeof voiceConfigs.$inferSelect, baseUrl: string) {
     webhookUrl: `${baseUrl}/api/voice/inbound`,
   };
 }
+
+// Sync env var credentials into the DB so secrets always take effect on restart
+async function syncEnvCredentials() {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const phone = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!sid && !token && !phone) return;
+
+  try {
+    const existing = await db.query.voiceConfigs.findFirst();
+    if (existing) {
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (sid) patch.twilioAccountSid = sid;
+      if (token) patch.twilioAuthToken = token;
+      if (phone) patch.twilioPhoneNumber = phone;
+      if (sid && token && phone) patch.isActive = true;
+      await db.update(voiceConfigs).set(patch).where(eq(voiceConfigs.id, existing.id));
+    } else {
+      await db.insert(voiceConfigs).values({
+        businessName: "My Business",
+        businessType: "general",
+        greeting: "Thank you for calling. How can I help you today?",
+        instructions: "",
+        hoursJson: DEFAULT_HOURS,
+        servicesJson: JSON.stringify([]),
+        voice: "nova",
+        isActive: !!(sid && token && phone),
+        twilioAccountSid: sid ?? null,
+        twilioAuthToken: token ?? null,
+        twilioPhoneNumber: phone ?? null,
+      });
+    }
+  } catch {
+    // Non-fatal — credentials can be set via UI
+  }
+}
+
+// Run on module load (non-blocking)
+syncEnvCredentials().catch(() => {});
 
 router.get("/voice/config", async (req, res) => {
   try {
