@@ -1,21 +1,63 @@
-export function score(text: string): number {
+import { db, keywordsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { DEFAULT_KEYWORDS } from "./default-keywords";
+
+let cachedKeywords: Array<{ phrase: string; score: number }> | null = null;
+let cacheExpiry = 0;
+
+async function getActiveKeywords(): Promise<Array<{ phrase: string; score: number }>> {
+  const now = Date.now();
+  if (cachedKeywords && now < cacheExpiry) return cachedKeywords;
+
+  try {
+    const rows = await db
+      .select()
+      .from(keywordsTable)
+      .where(eq(keywordsTable.enabled, true));
+
+    if (rows.length > 0) {
+      cachedKeywords = rows
+        .map((r) => ({ phrase: r.phrase, score: r.score }))
+        .sort((a, b) => b.score - a.score);
+      cacheExpiry = now + 60_000; // refresh every 60s
+      return cachedKeywords;
+    }
+  } catch {
+    // DB not ready yet — fall through to defaults
+  }
+
+  return DEFAULT_KEYWORDS
+    .filter((k) => k.score >= 5)
+    .map((k) => ({ phrase: k.phrase, score: k.score }))
+    .sort((a, b) => b.score - a.score);
+}
+
+export async function scoreAsync(text: string): Promise<number> {
+  const keywords = await getActiveKeywords();
   const t = text.toLowerCase();
 
-  if (t.includes("need help")) return 10;
-  if (t.includes("looking for") && (t.includes("tool") || t.includes("software") || t.includes("app"))) return 10;
-  if (t.includes("recommend") && (t.includes("tool") || t.includes("software"))) return 9;
-  if (t.includes("best tool") || t.includes("best software") || t.includes("best app")) return 9;
-  if (t.includes("looking for")) return 9;
-  if (t.includes("how do i") || t.includes("how can i")) return 8;
-  if (t.includes("tool") || t.includes("software") || t.includes("app")) return 8;
-  if (t.includes("recommend") || t.includes("suggestion")) return 7;
-  if (t.includes("automate") || t.includes("automation")) return 7;
-  if (t.includes("help me") || t.includes("anyone know")) return 6;
-  if (t.includes("alternatives") || t.includes("alternative to")) return 6;
-  if (t.includes("trying to") || t.includes("want to")) return 5;
-  if (t.includes("issue") || t.includes("problem") || t.includes("struggling")) return 4;
+  for (const kw of keywords) {
+    if (t.includes(kw.phrase)) return kw.score;
+  }
 
   return 3;
+}
+
+// Sync fallback for callers that can't await (used during cold start)
+export function score(text: string): number {
+  const t = text.toLowerCase();
+  const defaults = DEFAULT_KEYWORDS.sort((a, b) => b.score - a.score);
+
+  for (const kw of defaults) {
+    if (t.includes(kw.phrase)) return kw.score;
+  }
+
+  return 3;
+}
+
+export function invalidateScorerCache() {
+  cachedKeywords = null;
+  cacheExpiry = 0;
 }
 
 export function intentLabel(score: number): string {

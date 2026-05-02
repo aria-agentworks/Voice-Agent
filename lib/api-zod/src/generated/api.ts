@@ -125,3 +125,85 @@ export const GenerateResponseResponse = zod.object({
 export const GetSourcesResponse = zod.object({
   sources: zod.array(zod.string()),
 });
+
+/**
+ * Returns all configured scoring keywords
+ * @summary Get all intent keywords
+ */
+export const GetKeywordsResponse = zod.object({
+  keywords: zod.array(
+    zod.object({
+      id: zod.string(),
+      phrase: zod.string(),
+      score: zod.number(),
+      category: zod.string(),
+      enabled: zod.boolean(),
+      created_at: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * Add a new intent keyword with a score
+ * @summary Add a new keyword
+ */
+export const CreateKeywordBody = zod.object({
+  phrase: zod.string(),
+  score: zod.number(),
+  category: zod.string().optional(),
+});
+
+/**
+ * Reset all keywords to the default bank
+ * @summary Reset to defaults
+ */
+export const ResetKeywordsResponse = zod.object({
+  keywords: zod.array(
+    zod.object({
+      id: zod.string(),
+      phrase: zod.string(),
+      score: zod.number(),
+      category: zod.string(),
+      enabled: zod.boolean(),
+      created_at: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * Update a keyword's phrase, score, or enabled state
+ * @summary Update a keyword
+ */
+export const UpdateKeywordParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateKeywordBody = zod.object({
+  phrase: zod.string().optional(),
+  score: zod.number().optional(),
+  category: zod.string().optional(),
+  enabled: zod.boolean().optional(),
+});
+
+export const UpdateKeywordResponse = zod.object({
+  id: zod.string(),
+  phrase: zod.string(),
+  score: zod.number(),
+  category: zod.string(),
+  enabled: zod.boolean(),
+  created_at: zod.string(),
+});
+
+/**
+ * @summary Delete a keyword
+ */
+export const DeleteKeywordParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DeleteKeywordResponse = zod.object({
+  deleted: zod.boolean(),
+  id: zod.string(),
+});

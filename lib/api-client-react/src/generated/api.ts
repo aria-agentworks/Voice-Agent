@@ -17,17 +17,22 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CreateKeywordInput,
+  DeleteKeywordResult,
   GeneratedResponse,
   GetLeadsParams,
   HealthStatus,
+  Keyword,
+  KeywordsResponse,
   LeadsResponse,
   LeadsStats,
   SaveLeadResult,
   SourcesResponse,
+  UpdateKeywordInput,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -603,3 +608,420 @@ export function useGetSources<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns all configured scoring keywords
+ * @summary Get all intent keywords
+ */
+export const getGetKeywordsUrl = () => {
+  return `/api/keywords`;
+};
+
+export const getKeywords = async (
+  options?: RequestInit,
+): Promise<KeywordsResponse> => {
+  return customFetch<KeywordsResponse>(getGetKeywordsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetKeywordsQueryKey = () => {
+  return [`/api/keywords`] as const;
+};
+
+export const getGetKeywordsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getKeywords>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getKeywords>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetKeywordsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getKeywords>>> = ({
+    signal,
+  }) => getKeywords({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getKeywords>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetKeywordsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getKeywords>>
+>;
+export type GetKeywordsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all intent keywords
+ */
+
+export function useGetKeywords<
+  TData = Awaited<ReturnType<typeof getKeywords>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getKeywords>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetKeywordsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Add a new intent keyword with a score
+ * @summary Add a new keyword
+ */
+export const getCreateKeywordUrl = () => {
+  return `/api/keywords`;
+};
+
+export const createKeyword = async (
+  createKeywordInput: CreateKeywordInput,
+  options?: RequestInit,
+): Promise<Keyword> => {
+  return customFetch<Keyword>(getCreateKeywordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createKeywordInput),
+  });
+};
+
+export const getCreateKeywordMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createKeyword>>,
+    TError,
+    { data: BodyType<CreateKeywordInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createKeyword>>,
+  TError,
+  { data: BodyType<CreateKeywordInput> },
+  TContext
+> => {
+  const mutationKey = ["createKeyword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createKeyword>>,
+    { data: BodyType<CreateKeywordInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createKeyword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateKeywordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createKeyword>>
+>;
+export type CreateKeywordMutationBody = BodyType<CreateKeywordInput>;
+export type CreateKeywordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a new keyword
+ */
+export const useCreateKeyword = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createKeyword>>,
+    TError,
+    { data: BodyType<CreateKeywordInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createKeyword>>,
+  TError,
+  { data: BodyType<CreateKeywordInput> },
+  TContext
+> => {
+  return useMutation(getCreateKeywordMutationOptions(options));
+};
+
+/**
+ * Reset all keywords to the default bank
+ * @summary Reset to defaults
+ */
+export const getResetKeywordsUrl = () => {
+  return `/api/keywords/reset`;
+};
+
+export const resetKeywords = async (
+  options?: RequestInit,
+): Promise<KeywordsResponse> => {
+  return customFetch<KeywordsResponse>(getResetKeywordsUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResetKeywordsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetKeywords>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetKeywords>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["resetKeywords"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetKeywords>>,
+    void
+  > = () => {
+    return resetKeywords(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetKeywordsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetKeywords>>
+>;
+
+export type ResetKeywordsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reset to defaults
+ */
+export const useResetKeywords = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetKeywords>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetKeywords>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getResetKeywordsMutationOptions(options));
+};
+
+/**
+ * Update a keyword's phrase, score, or enabled state
+ * @summary Update a keyword
+ */
+export const getUpdateKeywordUrl = (id: string) => {
+  return `/api/keywords/${id}`;
+};
+
+export const updateKeyword = async (
+  id: string,
+  updateKeywordInput: UpdateKeywordInput,
+  options?: RequestInit,
+): Promise<Keyword> => {
+  return customFetch<Keyword>(getUpdateKeywordUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateKeywordInput),
+  });
+};
+
+export const getUpdateKeywordMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateKeyword>>,
+    TError,
+    { id: string; data: BodyType<UpdateKeywordInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateKeyword>>,
+  TError,
+  { id: string; data: BodyType<UpdateKeywordInput> },
+  TContext
+> => {
+  const mutationKey = ["updateKeyword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateKeyword>>,
+    { id: string; data: BodyType<UpdateKeywordInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateKeyword(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateKeywordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateKeyword>>
+>;
+export type UpdateKeywordMutationBody = BodyType<UpdateKeywordInput>;
+export type UpdateKeywordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a keyword
+ */
+export const useUpdateKeyword = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateKeyword>>,
+    TError,
+    { id: string; data: BodyType<UpdateKeywordInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateKeyword>>,
+  TError,
+  { id: string; data: BodyType<UpdateKeywordInput> },
+  TContext
+> => {
+  return useMutation(getUpdateKeywordMutationOptions(options));
+};
+
+/**
+ * @summary Delete a keyword
+ */
+export const getDeleteKeywordUrl = (id: string) => {
+  return `/api/keywords/${id}`;
+};
+
+export const deleteKeyword = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DeleteKeywordResult> => {
+  return customFetch<DeleteKeywordResult>(getDeleteKeywordUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteKeywordMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteKeyword>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteKeyword>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteKeyword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteKeyword>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteKeyword(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteKeywordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteKeyword>>
+>;
+
+export type DeleteKeywordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a keyword
+ */
+export const useDeleteKeyword = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteKeyword>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteKeyword>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteKeywordMutationOptions(options));
+};

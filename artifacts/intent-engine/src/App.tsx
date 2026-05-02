@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsExplorer from "@/pages/leads";
 import SavedLeads from "@/pages/saved";
+import KeywordsPage from "@/pages/keywords";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/leads" component={LeadsExplorer} />
       <Route path="/saved" component={SavedLeads} />
+      <Route path="/keywords" component={KeywordsPage} />
       <Route component={NotFound} />
     </Switch>
   );

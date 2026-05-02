@@ -59,6 +59,38 @@ export interface SourcesResponse {
   sources: string[];
 }
 
+export interface Keyword {
+  id: string;
+  phrase: string;
+  score: number;
+  category: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface KeywordsResponse {
+  keywords: Keyword[];
+  total: number;
+}
+
+export interface CreateKeywordInput {
+  phrase: string;
+  score: number;
+  category?: string;
+}
+
+export interface UpdateKeywordInput {
+  phrase?: string;
+  score?: number;
+  category?: string;
+  enabled?: boolean;
+}
+
+export interface DeleteKeywordResult {
+  deleted: boolean;
+  id: string;
+}
+
 export type GetLeadsParams = {
   min_score?: number;
   source?: string;

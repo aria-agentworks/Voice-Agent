@@ -14,6 +14,8 @@ tags:
     description: Lead fetching, scoring, and management
   - name: stats
     description: Dashboard statistics
+  - name: keywords
+    description: Intent keyword configuration
 
 paths:
   /healthz:
@@ -143,6 +145,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SourcesResponse"
+
+  /keywords:
+    get:
+      operationId: getKeywords
+      tags: [keywords]
+      summary: Get all intent keywords
+      description: Returns all configured scoring keywords
+      responses:
+        "200":
+          description: List of keywords
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeywordsResponse"
+    post:
+      operationId: createKeyword
+      tags: [keywords]
+      summary: Add a new keyword
+      description: Add a new intent keyword with a score
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKeywordInput"
+      responses:
+        "201":
+          description: Created keyword
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Keyword"
+
+  /keywords/reset:
+    post:
+      operationId: resetKeywords
+      tags: [keywords]
+      summary: Reset to defaults
+      description: Reset all keywords to the default bank
+      responses:
+        "200":
+          description: Keywords reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeywordsResponse"
+
+  /keywords/{id}:
+    patch:
+      operationId: updateKeyword
+      tags: [keywords]
+      summary: Update a keyword
+      description: Update a keyword's phrase, score, or enabled state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKeywordInput"
+      responses:
+        "200":
+          description: Updated keyword
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Keyword"
+    delete:
+      operationId: deleteKeyword
+      tags: [keywords]
+      summary: Delete a keyword
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteKeywordResult"
 
 components:
   schemas:
@@ -281,3 +372,75 @@ components:
             type: string
       required:
         - sources
+
+    Keyword:
+      type: object
+      properties:
+        id:
+          type: string
+        phrase:
+          type: string
+        score:
+          type: integer
+        category:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+      required:
+        - id
+        - phrase
+        - score
+        - category
+        - enabled
+        - created_at
+
+    KeywordsResponse:
+      type: object
+      properties:
+        keywords:
+          type: array
+          items:
+            $ref: "#/components/schemas/Keyword"
+        total:
+          type: integer
+      required:
+        - keywords
+        - total
+
+    CreateKeywordInput:
+      type: object
+      properties:
+        phrase:
+          type: string
+        score:
+          type: integer
+        category:
+          type: string
+      required:
+        - phrase
+        - score
+
+    UpdateKeywordInput:
+      type: object
+      properties:
+        phrase:
+          type: string
+        score:
+          type: integer
+        category:
+          type: string
+        enabled:
+          type: boolean
+
+    DeleteKeywordResult:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+        id:
+          type: string
+      required:
+        - deleted
+        - id

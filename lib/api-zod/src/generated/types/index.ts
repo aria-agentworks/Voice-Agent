@@ -6,12 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./createKeywordInput";
+export * from "./deleteKeywordResult";
 export * from "./generatedResponse";
 export * from "./getLeadsParams";
 export * from "./healthStatus";
+export * from "./keyword";
+export * from "./keywordsResponse";
 export * from "./lead";
 export * from "./leadsResponse";
 export * from "./leadsStats";
 export * from "./saveLeadResult";
 export * from "./sourceCount";
 export * from "./sourcesResponse";
+export * from "./updateKeywordInput";

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Activity, LayoutDashboard, Bookmark, Settings, Search } from "lucide-react";
+import { Activity, LayoutDashboard, Bookmark, Settings, Search, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LayoutProps {
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Lead Explorer", icon: Search },
   { href: "/saved", label: "Saved", icon: Bookmark },
+  { href: "/keywords", label: "Keywords", icon: Settings2 },
 ];
 
 export function Layout({ children }: LayoutProps) {
