@@ -108,6 +108,40 @@ function SignUpPage() {
   );
 }
 
+function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
+      <path d="M8 1L2 3.5v4C2 11.1 4.6 14.1 8 15c3.4-.9 6-3.9 6-7.5v-4L8 1z" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
+      <rect x="3" y="7" width="10" height="8" rx="1.5" />
+      <path d="M5 7V5a3 3 0 0 1 6 0v2" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckBadgeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
+      <path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm3.03 4.47L7 9.5 5.47 7.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5a.75.75 0 0 0-1.06-1.06z" />
+    </svg>
+  );
+}
+
+const complianceBadges = [
+  { label: "HIPAA Compliant", icon: <ShieldIcon />, color: "bg-emerald-900/60 text-emerald-300 border-emerald-700/50" },
+  { label: "SOC 2 Type II", icon: <CheckBadgeIcon />, color: "bg-blue-900/60 text-blue-300 border-blue-700/50" },
+  { label: "GDPR Ready", icon: <ShieldIcon />, color: "bg-violet-900/60 text-violet-300 border-violet-700/50" },
+  { label: "CCPA Compliant", icon: <CheckBadgeIcon />, color: "bg-sky-900/60 text-sky-300 border-sky-700/50" },
+  { label: "256-bit Encryption", icon: <LockIcon />, color: "bg-slate-800/80 text-slate-300 border-slate-600/50" },
+  { label: "ISO 27001", icon: <CheckBadgeIcon />, color: "bg-amber-900/60 text-amber-300 border-amber-700/50" },
+];
+
 function LandingPage() {
   return (
     <div className="min-h-[100dvh] bg-gradient-to-br from-slate-900 to-blue-950 flex flex-col items-center justify-center px-6 text-center">
@@ -116,11 +150,11 @@ function LandingPage() {
       </div>
       <h1 className="text-4xl font-bold text-white mb-3">VoiceAgent</h1>
       <p className="text-blue-200 text-lg mb-2">Enterprise AI Front Desk Platform</p>
-      <p className="text-slate-400 max-w-md mb-10 text-sm leading-relaxed">
+      <p className="text-slate-400 max-w-md mb-8 text-sm leading-relaxed">
         AI-powered phone answering for medical, dental, and professional practices.
         24/7 scheduling, HIPAA-aware, multi-location, and fully enterprise-ready.
       </p>
-      <div className="flex gap-3">
+      <div className="flex gap-3 mb-10">
         <a href={`${basePath}/sign-up`} className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
           Get Started
         </a>
@@ -128,6 +162,18 @@ function LandingPage() {
           Sign In
         </a>
       </div>
+      <div className="flex flex-wrap justify-center gap-2 max-w-lg">
+        {complianceBadges.map((badge) => (
+          <span
+            key={badge.label}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${badge.color}`}
+          >
+            {badge.icon}
+            {badge.label}
+          </span>
+        ))}
+      </div>
+      <p className="text-slate-600 text-xs mt-4">Enterprise-grade security &amp; compliance</p>
     </div>
   );
 }
