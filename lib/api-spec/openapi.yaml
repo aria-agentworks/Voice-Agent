@@ -177,6 +177,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/GeneratedResponse"
 
+  /leads/{id}/analyze:
+    post:
+      operationId: analyzeLead
+      tags: [leads]
+      summary: AI analysis of a lead
+      description: Use AI to analyze the lead's intent, pain level, and recommend the optimal outreach strategy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lead analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadAnalysis"
+
   /leads/{id}/enrich:
     get:
       operationId: enrichLead
@@ -636,6 +656,53 @@ components:
       required:
         - deleted
         - id
+
+    LeadAnalysis:
+      type: object
+      properties:
+        lead_id:
+          type: string
+        summary:
+          type: string
+        pain_level:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        urgency:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+        tech_level:
+          type: string
+          enum: [NON_TECHNICAL, TECHNICAL, DEVELOPER]
+        recommended_channel:
+          type: string
+          enum: [POST_REPLY, EMAIL, DM]
+        recommended_style:
+          type: string
+          enum: [EMPATHETIC, DIRECT, CURIOSITY]
+        reasoning:
+          type: string
+        key_angles:
+          type: array
+          items:
+            type: string
+        avoid:
+          type: array
+          items:
+            type: string
+        opening_hook:
+          type: string
+      required:
+        - lead_id
+        - summary
+        - pain_level
+        - urgency
+        - tech_level
+        - recommended_channel
+        - recommended_style
+        - reasoning
+        - key_angles
+        - avoid
+        - opening_hook
 
     SourceProfile:
       type: object

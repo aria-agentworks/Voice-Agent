@@ -135,6 +135,66 @@ export interface DeleteKeywordResult {
   id: string;
 }
 
+export type LeadAnalysisPainLevel =
+  (typeof LeadAnalysisPainLevel)[keyof typeof LeadAnalysisPainLevel];
+
+export const LeadAnalysisPainLevel = {
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+  CRITICAL: "CRITICAL",
+} as const;
+
+export type LeadAnalysisUrgency =
+  (typeof LeadAnalysisUrgency)[keyof typeof LeadAnalysisUrgency];
+
+export const LeadAnalysisUrgency = {
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+} as const;
+
+export type LeadAnalysisTechLevel =
+  (typeof LeadAnalysisTechLevel)[keyof typeof LeadAnalysisTechLevel];
+
+export const LeadAnalysisTechLevel = {
+  NON_TECHNICAL: "NON_TECHNICAL",
+  TECHNICAL: "TECHNICAL",
+  DEVELOPER: "DEVELOPER",
+} as const;
+
+export type LeadAnalysisRecommendedChannel =
+  (typeof LeadAnalysisRecommendedChannel)[keyof typeof LeadAnalysisRecommendedChannel];
+
+export const LeadAnalysisRecommendedChannel = {
+  POST_REPLY: "POST_REPLY",
+  EMAIL: "EMAIL",
+  DM: "DM",
+} as const;
+
+export type LeadAnalysisRecommendedStyle =
+  (typeof LeadAnalysisRecommendedStyle)[keyof typeof LeadAnalysisRecommendedStyle];
+
+export const LeadAnalysisRecommendedStyle = {
+  EMPATHETIC: "EMPATHETIC",
+  DIRECT: "DIRECT",
+  CURIOSITY: "CURIOSITY",
+} as const;
+
+export interface LeadAnalysis {
+  lead_id: string;
+  summary: string;
+  pain_level: LeadAnalysisPainLevel;
+  urgency: LeadAnalysisUrgency;
+  tech_level: LeadAnalysisTechLevel;
+  recommended_channel: LeadAnalysisRecommendedChannel;
+  recommended_style: LeadAnalysisRecommendedStyle;
+  reasoning: string;
+  key_angles: string[];
+  avoid: string[];
+  opening_hook: string;
+}
+
 export interface SourceProfile {
   karma: number | null;
   account_age_days: number | null;

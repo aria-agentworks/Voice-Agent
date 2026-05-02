@@ -171,6 +171,28 @@ export const GenerateResponseResponse = zod.object({
 });
 
 /**
+ * Use AI to analyze the lead's intent, pain level, and recommend the optimal outreach strategy
+ * @summary AI analysis of a lead
+ */
+export const AnalyzeLeadParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AnalyzeLeadResponse = zod.object({
+  lead_id: zod.string(),
+  summary: zod.string(),
+  pain_level: zod.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  urgency: zod.enum(["LOW", "MEDIUM", "HIGH"]),
+  tech_level: zod.enum(["NON_TECHNICAL", "TECHNICAL", "DEVELOPER"]),
+  recommended_channel: zod.enum(["POST_REPLY", "EMAIL", "DM"]),
+  recommended_style: zod.enum(["EMPATHETIC", "DIRECT", "CURIOSITY"]),
+  reasoning: zod.string(),
+  key_angles: zod.array(zod.string()),
+  avoid: zod.array(zod.string()),
+  opening_hook: zod.string(),
+});
+
+/**
  * Extract contact info from post text and fetch the author's public platform profile
  * @summary Enrich a lead
  */

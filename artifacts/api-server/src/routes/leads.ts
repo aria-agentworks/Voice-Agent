@@ -16,11 +16,14 @@ import {
   UpdateLeadStatusResponse,
   EnrichLeadParams,
   EnrichLeadResponse,
+  AnalyzeLeadParams,
+  AnalyzeLeadResponse,
 } from "@workspace/api-zod";
 import { fetchAllLeads } from "../lib/sources/index";
 import type { SourceMeta } from "../lib/sources/index";
 import { generateResponse, generateVariants } from "../lib/responder";
 import { enrichLead } from "../lib/enricher";
+import { analyzeLead } from "../lib/analyzer";
 import type { ScoredLead } from "../lib/types";
 
 const router: IRouter = Router();
@@ -243,6 +246,31 @@ router.post("/leads/:id/respond", async (req, res): Promise<void> => {
 
   const variants = generateVariants(lead.text, lead.source);
   res.json(GenerateResponseResponse.parse({ message: variants[0].message, variants, lead_id: id }));
+});
+
+router.post("/leads/:id/analyze", async (req, res): Promise<void> => {
+  const params = AnalyzeLeadParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const { id } = params.data;
+  const lead = cachedLeads.find((l) => l.id === id);
+
+  if (!lead) {
+    const [saved] = await db.select().from(savedLeadsTable).where(eq(savedLeadsTable.id, id));
+    if (!saved) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const result = await analyzeLead(id, saved.text, saved.source, saved.author);
+    res.json(AnalyzeLeadResponse.parse(result));
+    return;
+  }
+
+  const result = await analyzeLead(id, lead.text, lead.source, lead.author ?? null);
+  res.json(AnalyzeLeadResponse.parse(result));
 });
 
 router.get("/leads/:id/enrich", async (req, res): Promise<void> => {

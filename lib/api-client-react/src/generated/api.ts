@@ -25,6 +25,7 @@ import type {
   HealthStatus,
   Keyword,
   KeywordsResponse,
+  LeadAnalysis,
   LeadsResponse,
   LeadsStats,
   SaveLeadResult,
@@ -706,6 +707,91 @@ export const useGenerateResponse = <
   TContext
 > => {
   return useMutation(getGenerateResponseMutationOptions(options));
+};
+
+/**
+ * Use AI to analyze the lead's intent, pain level, and recommend the optimal outreach strategy
+ * @summary AI analysis of a lead
+ */
+export const getAnalyzeLeadUrl = (id: string) => {
+  return `/api/leads/${id}/analyze`;
+};
+
+export const analyzeLead = async (
+  id: string,
+  options?: RequestInit,
+): Promise<LeadAnalysis> => {
+  return customFetch<LeadAnalysis>(getAnalyzeLeadUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAnalyzeLeadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeLead>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof analyzeLead>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["analyzeLead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeLead>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return analyzeLead(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AnalyzeLeadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof analyzeLead>>
+>;
+
+export type AnalyzeLeadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary AI analysis of a lead
+ */
+export const useAnalyzeLead = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeLead>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeLead>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAnalyzeLeadMutationOptions(options));
 };
 
 /**
