@@ -2,7 +2,8 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { voiceCalls, voiceMessages, voiceConfigs } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { generateVoiceResponse } from "./gpt.js";
+import { generateVoiceResponse, isWithinBusinessHours, getBusinessHoursSummary } from "./gpt.js";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -62,6 +63,20 @@ router.post("/voice/inbound", async (req, res) => {
         direction: "inbound",
         status: "in-progress",
       });
+    }
+
+    // After-hours handling
+    if (config.hoursJson && !isWithinBusinessHours(config.hoursJson, config.timezone)) {
+      const hoursSummary = getBusinessHoursSummary(config.hoursJson);
+      const afterHoursMsg = `Thank you for calling ${config.businessName}. We are currently closed. Our hours are ${hoursSummary}. Please call back during business hours or leave a message after the tone.`;
+      return res.send(
+        twiml(`
+          <Say voice="Polly.Joanna-Neural">${xmlSafe(afterHoursMsg)}</Say>
+          <Record maxLength="120" action="/api/voice/status" transcribeCallback="/api/voice/status" />
+          <Say voice="Polly.Joanna-Neural">Thank you for your message. Goodbye.</Say>
+          <Hangup/>
+        `)
+      );
     }
 
     const greeting =
@@ -201,6 +216,47 @@ router.post("/voice/outbound-twiml", async (req, res) => {
   }
 });
 
+async function autoSummarizeCall(callId: string, logger: { error: (obj: object, msg: string) => void }) {
+  try {
+    const messages = await db.query.voiceMessages.findMany({
+      where: eq(voiceMessages.callId, callId),
+      orderBy: (m, { asc }) => [asc(m.createdAt)],
+    });
+    if (messages.length < 2) return;
+
+    const transcript = messages
+      .map((m) => `${m.role === "user" ? "Caller" : "Agent"}: ${m.content}`)
+      .join("\n");
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 200,
+      messages: [
+        {
+          role: "system",
+          content:
+            'Summarize this phone call in one concise sentence. Classify outcome as one of: appointment_booked, inquiry_handled, complaint, transfer_requested, wrong_number, callback_requested, resolved, no_answer. Return JSON: {"summary": "...", "outcome": "..."}',
+        },
+        { role: "user", content: transcript },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const parsed = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+    if (parsed.summary || parsed.outcome) {
+      await db
+        .update(voiceCalls)
+        .set({
+          summary: parsed.summary ?? undefined,
+          outcome: parsed.outcome ?? undefined,
+        })
+        .where(eq(voiceCalls.id, callId));
+    }
+  } catch (err) {
+    logger.error({ err }, "Auto-summarize failed");
+  }
+}
+
 router.post("/voice/status", async (req, res) => {
   const { CallSid, CallStatus, CallDuration } = req.body as Record<string, string>;
 
@@ -221,6 +277,10 @@ router.post("/voice/status", async (req, res) => {
           endedAt: isTerminal ? new Date() : undefined,
         })
         .where(eq(voiceCalls.id, call.id));
+
+      if (isTerminal && CallStatus === "completed") {
+        autoSummarizeCall(call.id, req.log).catch(() => {});
+      }
     }
   } catch (err) {
     req.log.error({ err }, "Error handling status callback");

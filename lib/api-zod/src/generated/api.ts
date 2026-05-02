@@ -525,6 +525,77 @@ export const GetVoiceCallResponse = zod.object({
 });
 
 /**
+ * @summary Get call analytics - hourly distribution and daily volume
+ */
+export const getVoiceAnalyticsQueryDaysDefault = 7;
+
+export const GetVoiceAnalyticsQueryParams = zod.object({
+  days: zod.coerce.number().default(getVoiceAnalyticsQueryDaysDefault),
+});
+
+export const GetVoiceAnalyticsResponse = zod.object({
+  hourly: zod.array(
+    zod.object({
+      hour: zod.number(),
+      count: zod.number(),
+    }),
+  ),
+  daily: zod.array(
+    zod.object({
+      date: zod.string(),
+      count: zod.number(),
+      inbound: zod.number(),
+      outbound: zod.number(),
+    }),
+  ),
+  peakHour: zod.number().nullish(),
+  missedToday: zod.number(),
+});
+
+/**
+ * @summary Get currently in-progress calls
+ */
+export const GetVoiceCallsLiveResponseItem = zod.object({
+  id: zod.string(),
+  callSid: zod.string(),
+  fromNumber: zod.string(),
+  toNumber: zod.string(),
+  direction: zod.string(),
+  status: zod.string(),
+  durationSeconds: zod.number().nullish(),
+  outcome: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  startedAt: zod.string(),
+  endedAt: zod.string().nullish(),
+  messageCount: zod.number(),
+});
+export const GetVoiceCallsLiveResponse = zod.array(
+  GetVoiceCallsLiveResponseItem,
+);
+
+/**
+ * @summary Generate or regenerate AI summary and outcome for a call
+ */
+export const SummarizeVoiceCallParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SummarizeVoiceCallResponse = zod.object({
+  id: zod.string(),
+  callSid: zod.string(),
+  fromNumber: zod.string(),
+  toNumber: zod.string(),
+  direction: zod.string(),
+  status: zod.string(),
+  durationSeconds: zod.number().nullish(),
+  outcome: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  startedAt: zod.string(),
+  endedAt: zod.string().nullish(),
+  messageCount: zod.number(),
+});
+
+/**
  * @summary Initiate an outbound call
  */
 export const CreateOutboundCallBody = zod.object({

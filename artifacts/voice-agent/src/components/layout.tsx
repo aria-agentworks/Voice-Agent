@@ -1,16 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  PhoneCall,
-  PhoneOutgoing,
-  Settings2,
-  Settings,
-  Menu,
-  X,
-  Activity,
+  LayoutDashboard, PhoneCall, PhoneOutgoing, Settings2, Settings,
+  Menu, X, Activity
 } from "lucide-react";
 import { useState } from "react";
+import { useGetVoiceAnalytics } from "@workspace/api-client-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -20,9 +15,20 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+function MissedBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shrink-0">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: analytics } = useGetVoiceAnalytics({ days: 7 });
+  const missedToday = analytics?.missedToday ?? 0;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -40,9 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Activity className="h-4 w-4 text-primary-foreground" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-sidebar-foreground leading-none">
-              VoiceAgent
-            </p>
+            <p className="text-sm font-semibold text-sidebar-foreground leading-none">VoiceAgent</p>
             <p className="text-xs text-muted-foreground mt-0.5">AI Front Desk</p>
           </div>
         </div>
@@ -50,10 +54,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {nav.map(({ href, label, icon: Icon }) => {
-            const active =
-              href === "/"
-                ? location === "/"
-                : location.startsWith(href);
+            const active = href === "/" ? location === "/" : location.startsWith(href);
+            const showMissed = href === "/calls" && missedToday > 0;
             return (
               <Link
                 key={href}
@@ -68,24 +70,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {label}
+                {showMissed && <MissedBadge count={missedToday} />}
               </Link>
             );
           })}
         </nav>
 
         <div className="px-4 py-3 border-t border-sidebar-border">
-          <p className="text-xs text-muted-foreground">
-            Powered by OpenAI + Twilio
-          </p>
+          <p className="text-xs text-muted-foreground">Powered by OpenAI + Twilio</p>
         </div>
       </aside>
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* Main */}
@@ -99,6 +97,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <span className="font-semibold text-sm">VoiceAgent</span>
+          {missedToday > 0 && (
+            <span className="ml-auto flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+              {missedToday} missed
+            </span>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto">{children}</main>

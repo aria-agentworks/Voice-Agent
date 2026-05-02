@@ -320,6 +320,25 @@ export interface VoiceCallDetail {
   messages: VoiceMessage[];
 }
 
+export interface VoiceHourlyCount {
+  hour: number;
+  count: number;
+}
+
+export interface VoiceDailyCount {
+  date: string;
+  count: number;
+  inbound: number;
+  outbound: number;
+}
+
+export interface VoiceAnalytics {
+  hourly: VoiceHourlyCount[];
+  daily: VoiceDailyCount[];
+  peakHour?: number | null;
+  missedToday: number;
+}
+
 export interface CreateOutboundCallInput {
   toNumber: string;
   purpose?: string | null;
@@ -343,4 +362,8 @@ export type GetVoiceCallsParams = {
   limit?: number;
   direction?: string;
   status?: string;
+};
+
+export type GetVoiceAnalyticsParams = {
+  days?: number;
 };

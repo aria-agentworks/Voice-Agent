@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { voiceCalls, voiceMessages, voiceConfigs } from "@workspace/db";
-import { eq, desc, count, sql, isNotNull } from "drizzle-orm";
+import { eq, desc, count, sql, isNotNull, and } from "drizzle-orm";
 import { textToSpeech } from "@workspace/integrations-openai-ai-server/audio";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -67,9 +68,20 @@ router.get("/voice/calls", async (req, res) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const offset = (page - 1) * limit;
+    const direction = req.query.direction as string | undefined;
+    const status = req.query.status as string | undefined;
+    const outcome = req.query.outcome as string | undefined;
+
+    const conditions = [];
+    if (direction) conditions.push(eq(voiceCalls.direction, direction));
+    if (status) conditions.push(eq(voiceCalls.status, status));
+    if (outcome) conditions.push(eq(voiceCalls.outcome, outcome));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const calls = await db.query.voiceCalls.findMany({
-      orderBy: [desc(voiceCalls.createdAt)],
+      where,
+      orderBy: [desc(voiceCalls.startedAt)],
       limit,
       offset,
     });
@@ -84,7 +96,10 @@ router.get("/voice/calls", async (req, res) => {
       })
     );
 
-    const [{ total }] = await db.select({ total: count() }).from(voiceCalls);
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(voiceCalls)
+      .where(where);
 
     return res.json({
       calls: callsWithCounts,
@@ -94,6 +109,116 @@ router.get("/voice/calls", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Error getting voice calls");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/voice/calls/live", async (req, res) => {
+  try {
+    const liveCalls = await db.query.voiceCalls.findMany({
+      where: eq(voiceCalls.status, "in-progress"),
+      orderBy: [desc(voiceCalls.startedAt)],
+      limit: 20,
+    });
+    const withCounts = await Promise.all(
+      liveCalls.map(async (call) => {
+        const [{ msgCount }] = await db
+          .select({ msgCount: count() })
+          .from(voiceMessages)
+          .where(eq(voiceMessages.callId, call.id));
+        return { ...call, messageCount: Number(msgCount) };
+      })
+    );
+    return res.json(withCounts);
+  } catch (err) {
+    req.log.error({ err }, "Error getting live calls");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/voice/calls/export", async (req, res) => {
+  try {
+    const calls = await db.query.voiceCalls.findMany({
+      orderBy: [desc(voiceCalls.startedAt)],
+      limit: 5000,
+    });
+    const header = "Call SID,From,To,Direction,Status,Duration (s),Outcome,Summary,Started At,Ended At\n";
+    const rows = calls
+      .map((c) =>
+        [
+          c.callSid,
+          c.fromNumber,
+          c.toNumber,
+          c.direction,
+          c.status,
+          c.durationSeconds ?? "",
+          c.outcome ?? "",
+          `"${(c.summary ?? "").replace(/"/g, '""')}"`,
+          c.startedAt?.toISOString() ?? "",
+          c.endedAt?.toISOString() ?? "",
+        ].join(",")
+      )
+      .join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="voice-calls-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return res.send(header + rows);
+  } catch (err) {
+    req.log.error({ err }, "Error exporting calls");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/voice/calls/:id/summarize", async (req, res) => {
+  try {
+    const call = await db.query.voiceCalls.findFirst({
+      where: eq(voiceCalls.id, req.params.id),
+    });
+    if (!call) return res.status(404).json({ error: "Call not found" });
+
+    const messages = await db.query.voiceMessages.findMany({
+      where: eq(voiceMessages.callId, call.id),
+      orderBy: (m, { asc }) => [asc(m.createdAt)],
+    });
+
+    if (!messages.length) {
+      return res.json({ ...call, messageCount: 0 });
+    }
+
+    const transcript = messages
+      .map((m) => `${m.role === "user" ? "Caller" : "Agent"}: ${m.content}`)
+      .join("\n");
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 200,
+      messages: [
+        {
+          role: "system",
+          content:
+            'Summarize this phone call transcript in one concise sentence. Also classify the outcome. Return JSON: {"summary": "...", "outcome": "appointment_booked|inquiry_handled|complaint|transfer_requested|wrong_number|callback_requested|resolved|no_answer"}',
+        },
+        { role: "user", content: transcript },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    let summary = call.summary;
+    let outcome = call.outcome;
+    try {
+      const parsed = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+      summary = parsed.summary ?? summary;
+      outcome = parsed.outcome ?? outcome;
+    } catch {}
+
+    const [updated] = await db
+      .update(voiceCalls)
+      .set({ summary, outcome })
+      .where(eq(voiceCalls.id, call.id))
+      .returning();
+
+    return res.json({ ...updated, messageCount: messages.length });
+  } catch (err) {
+    req.log.error({ err }, "Error summarizing call");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

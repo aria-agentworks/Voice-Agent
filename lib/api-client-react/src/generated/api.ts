@@ -24,6 +24,7 @@ import type {
   EnrichmentData,
   GeneratedResponse,
   GetLeadsParams,
+  GetVoiceAnalyticsParams,
   GetVoiceCallsParams,
   HealthStatus,
   Keyword,
@@ -40,6 +41,8 @@ import type {
   UpdateLeadStatusInput,
   UpdateLeadStatusResult,
   UpdateVoiceConfigInput,
+  VoiceAnalytics,
+  VoiceCall,
   VoiceCallDetail,
   VoiceCallStats,
   VoiceCallsResponse,
@@ -1976,6 +1979,262 @@ export function useGetVoiceCall<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get call analytics - hourly distribution and daily volume
+ */
+export const getGetVoiceAnalyticsUrl = (params?: GetVoiceAnalyticsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/voice/analytics?${stringifiedParams}`
+    : `/api/voice/analytics`;
+};
+
+export const getVoiceAnalytics = async (
+  params?: GetVoiceAnalyticsParams,
+  options?: RequestInit,
+): Promise<VoiceAnalytics> => {
+  return customFetch<VoiceAnalytics>(getGetVoiceAnalyticsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVoiceAnalyticsQueryKey = (
+  params?: GetVoiceAnalyticsParams,
+) => {
+  return [`/api/voice/analytics`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetVoiceAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVoiceAnalytics>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetVoiceAnalyticsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVoiceAnalytics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetVoiceAnalyticsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVoiceAnalytics>>
+  > = ({ signal }) => getVoiceAnalytics(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVoiceAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVoiceAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVoiceAnalytics>>
+>;
+export type GetVoiceAnalyticsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get call analytics - hourly distribution and daily volume
+ */
+
+export function useGetVoiceAnalytics<
+  TData = Awaited<ReturnType<typeof getVoiceAnalytics>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetVoiceAnalyticsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVoiceAnalytics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVoiceAnalyticsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get currently in-progress calls
+ */
+export const getGetVoiceCallsLiveUrl = () => {
+  return `/api/voice/calls/live`;
+};
+
+export const getVoiceCallsLive = async (
+  options?: RequestInit,
+): Promise<VoiceCall[]> => {
+  return customFetch<VoiceCall[]>(getGetVoiceCallsLiveUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVoiceCallsLiveQueryKey = () => {
+  return [`/api/voice/calls/live`] as const;
+};
+
+export const getGetVoiceCallsLiveQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVoiceCallsLive>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVoiceCallsLive>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetVoiceCallsLiveQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVoiceCallsLive>>
+  > = ({ signal }) => getVoiceCallsLive({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVoiceCallsLive>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVoiceCallsLiveQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVoiceCallsLive>>
+>;
+export type GetVoiceCallsLiveQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get currently in-progress calls
+ */
+
+export function useGetVoiceCallsLive<
+  TData = Awaited<ReturnType<typeof getVoiceCallsLive>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVoiceCallsLive>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVoiceCallsLiveQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate or regenerate AI summary and outcome for a call
+ */
+export const getSummarizeVoiceCallUrl = (id: string) => {
+  return `/api/voice/calls/${id}/summarize`;
+};
+
+export const summarizeVoiceCall = async (
+  id: string,
+  options?: RequestInit,
+): Promise<VoiceCall> => {
+  return customFetch<VoiceCall>(getSummarizeVoiceCallUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSummarizeVoiceCallMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof summarizeVoiceCall>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof summarizeVoiceCall>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["summarizeVoiceCall"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof summarizeVoiceCall>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return summarizeVoiceCall(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SummarizeVoiceCallMutationResult = NonNullable<
+  Awaited<ReturnType<typeof summarizeVoiceCall>>
+>;
+
+export type SummarizeVoiceCallMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Generate or regenerate AI summary and outcome for a call
+ */
+export const useSummarizeVoiceCall = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof summarizeVoiceCall>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof summarizeVoiceCall>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getSummarizeVoiceCallMutationOptions(options));
+};
 
 /**
  * @summary Initiate an outbound call

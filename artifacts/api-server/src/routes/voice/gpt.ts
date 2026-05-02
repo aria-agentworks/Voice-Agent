@@ -13,6 +13,13 @@ interface BusinessConfig {
   hoursJson: string;
   servicesJson: string;
   transferNumber?: string | null;
+  timezone?: string | null;
+}
+
+interface HourEntry {
+  open: string;
+  close: string;
+  closed: boolean;
 }
 
 const BUSINESS_TYPE_CONTEXT: Record<string, string> = {
@@ -24,6 +31,53 @@ const BUSINESS_TYPE_CONTEXT: Record<string, string> = {
   general: "a business providing professional services",
 };
 
+const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+export function isWithinBusinessHours(hoursJson: string, timezone?: string | null): boolean {
+  try {
+    const hours: Record<string, HourEntry> = JSON.parse(hoursJson);
+    const tz = timezone || "America/New_York";
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const weekday = parts.find((p) => p.type === "weekday")?.value?.toLowerCase() ?? "";
+    const hourPart = parts.find((p) => p.type === "hour")?.value ?? "0";
+    const minutePart = parts.find((p) => p.type === "minute")?.value ?? "0";
+    const currentMinutes = parseInt(hourPart) * 60 + parseInt(minutePart);
+
+    const entry = hours[weekday];
+    if (!entry || entry.closed) return false;
+
+    const [openH, openM] = entry.open.split(":").map(Number);
+    const [closeH, closeM] = entry.close.split(":").map(Number);
+    const openMin = openH * 60 + openM;
+    const closeMin = closeH * 60 + closeM;
+
+    return currentMinutes >= openMin && currentMinutes < closeMin;
+  } catch {
+    return true; // default open if hours not configured
+  }
+}
+
+export function getBusinessHoursSummary(hoursJson: string): string {
+  try {
+    const hours: Record<string, HourEntry> = JSON.parse(hoursJson);
+    return DAYS.map((day) => {
+      const entry = hours[day];
+      if (!entry || entry.closed) return `${day}: Closed`;
+      return `${day}: ${entry.open}–${entry.close}`;
+    }).join(", ");
+  } catch {
+    return "";
+  }
+}
+
 export async function generateVoiceResponse(
   userInput: string,
   config: BusinessConfig,
@@ -34,35 +88,33 @@ export async function generateVoiceResponse(
     services = JSON.parse(config.servicesJson);
   } catch {}
 
-  let hoursStr = "";
-  try {
-    const hours = JSON.parse(config.hoursJson);
-    const entries = Object.entries(hours)
-      .map(([day, time]) => `${day}: ${time}`)
-      .join(", ");
-    hoursStr = entries;
-  } catch {}
-
+  const hoursStr = getBusinessHoursSummary(config.hoursJson);
   const businessTypeContext =
     BUSINESS_TYPE_CONTEXT[config.businessType] || BUSINESS_TYPE_CONTEXT.general;
 
+  // Detect if caller wants to be transferred based on conversation
+  const wantsTransfer =
+    history.some((m) => m.role === "assistant" && m.content.toLowerCase().includes("transfer you")) &&
+    config.transferNumber;
+
   const systemContent = [
     `You are the AI front desk assistant for ${config.businessName}, ${businessTypeContext}.`,
-    services.length > 0
-      ? `Services offered: ${services.join(", ")}.`
-      : "",
+    services.length > 0 ? `Services offered: ${services.join(", ")}.` : "",
     hoursStr ? `Business hours: ${hoursStr}.` : "",
     config.instructions ? `Special instructions: ${config.instructions}` : "",
     "",
     "CRITICAL RULES FOR PHONE CALLS:",
-    "- Keep every response to 1-2 short sentences. This is a phone call — be brief.",
+    "- Keep every response to 1-2 short sentences maximum. This is a phone call — be concise.",
     "- Be warm, professional, and helpful.",
-    "- Do NOT use markdown, bullet points, lists, or any formatting.",
-    "- Speak naturally as if talking on the phone.",
-    "- If the caller wants to schedule an appointment, ask for their name and preferred time.",
-    "- If you cannot help, say you will transfer them to a staff member.",
-    config.transferNumber
-      ? `- To transfer, say: "Let me transfer you now. Please hold."`
+    "- Do NOT use markdown, bullet points, numbered lists, or any text formatting.",
+    "- Speak naturally as if you are talking on the phone.",
+    "- If the caller wants to schedule an appointment, ask for their name and preferred date/time.",
+    "- When confirming an appointment, repeat back the details clearly.",
+    "- If a caller seems upset or distressed, express empathy before solving their issue.",
+    "- If you cannot help with something specific, offer to take a message or transfer them.",
+    wantsTransfer ? `- The caller is being transferred. Say: "Connecting you now. Please hold."` : "",
+    !wantsTransfer && config.transferNumber
+      ? `- If the caller needs urgent help or insists on speaking to a person, say: "Let me transfer you to a staff member. Please hold."`
       : "",
   ]
     .filter(Boolean)
@@ -78,7 +130,7 @@ export async function generateVoiceResponse(
   ];
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: "gpt-4o-mini",
     max_completion_tokens: 200,
     messages,
   });

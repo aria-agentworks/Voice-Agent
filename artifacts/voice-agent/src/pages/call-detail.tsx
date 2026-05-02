@@ -1,10 +1,18 @@
 import { useRoute, Link } from "wouter";
-import { useGetVoiceCall, getGetVoiceCallQueryKey } from "@workspace/api-client-react";
+import {
+  useGetVoiceCall, getGetVoiceCallQueryKey,
+  useSummarizeVoiceCall, useCreateOutboundCall
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, PhoneIncoming, PhoneOutgoing, Clock, MessageSquare, User, Bot } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowLeft, PhoneIncoming, PhoneOutgoing, Clock, MessageSquare,
+  User, Bot, Sparkles, Phone, RefreshCw
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function formatDuration(s: number | null | undefined) {
@@ -16,20 +24,13 @@ function formatDuration(s: number | null | undefined) {
 
 function formatDateFull(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    weekday: "short", month: "short", day: "numeric",
+    year: "numeric", hour: "numeric", minute: "2-digit",
   });
 }
 
 function formatMsgTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -39,22 +40,64 @@ const STATUS_COLORS: Record<string, string> = {
   "no-answer": "bg-amber-100 text-amber-700",
 };
 
+const OUTCOME_DISPLAY: Record<string, { label: string; color: string }> = {
+  appointment_booked: { label: "Appointment Booked", color: "text-emerald-700 bg-emerald-100 border-emerald-200" },
+  inquiry_handled: { label: "Inquiry Handled", color: "text-blue-700 bg-blue-100 border-blue-200" },
+  complaint: { label: "Complaint", color: "text-red-700 bg-red-100 border-red-200" },
+  transfer_requested: { label: "Transfer Requested", color: "text-violet-700 bg-violet-100 border-violet-200" },
+  wrong_number: { label: "Wrong Number", color: "text-gray-600 bg-gray-100 border-gray-200" },
+  callback_requested: { label: "Callback Requested", color: "text-amber-700 bg-amber-100 border-amber-200" },
+  resolved: { label: "Resolved", color: "text-teal-700 bg-teal-100 border-teal-200" },
+  no_answer: { label: "No Answer", color: "text-gray-600 bg-gray-100 border-gray-200" },
+};
+
 export default function CallDetail() {
   const [, params] = useRoute("/calls/:id");
   const id = params?.id ?? "";
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data, isLoading } = useGetVoiceCall(id, {
+  const { data, isLoading, refetch } = useGetVoiceCall(id, {
     query: { enabled: !!id, queryKey: getGetVoiceCallQueryKey(id) },
   });
 
+  const summarizeMutation = useSummarizeVoiceCall();
+  const callbackMutation = useCreateOutboundCall();
+
   const call = data?.call;
   const messages = data?.messages ?? [];
+
+  const handleSummarize = () => {
+    summarizeMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["getVoiceCalls"] });
+          toast({ title: "Summary generated", description: "AI summary and outcome classification complete." });
+        },
+        onError: () => toast({ title: "Failed", description: "Could not generate summary.", variant: "destructive" }),
+      }
+    );
+  };
+
+  const handleCallback = () => {
+    if (!call) return;
+    const number = call.direction === "inbound" ? call.fromNumber : call.toNumber;
+    callbackMutation.mutate(
+      { toNumber: number, purpose: "Follow-up callback" },
+      {
+        onSuccess: () => toast({ title: "Call initiated", description: `Calling ${number}` }),
+        onError: () => toast({ title: "Failed", description: "Check Twilio credentials in Settings.", variant: "destructive" }),
+      }
+    );
+  };
 
   if (isLoading) {
     return (
       <div className="p-6 max-w-4xl mx-auto space-y-5">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-36 w-full" />
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className={cn("h-12", i % 2 === 0 ? "w-3/4" : "w-2/3 ml-auto")} />
@@ -68,24 +111,48 @@ export default function CallDetail() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <Link href="/calls">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to calls
-          </Button>
+          <Button variant="ghost" size="sm" className="mb-4"><ArrowLeft className="h-4 w-4 mr-1.5" /> Back to calls</Button>
         </Link>
         <p className="text-muted-foreground">Call not found.</p>
       </div>
     );
   }
 
+  const callNumber = call.direction === "inbound" ? call.fromNumber : call.toNumber;
+  const outcomeInfo = call.outcome ? OUTCOME_DISPLAY[call.outcome] : null;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
-      <div className="flex items-center gap-3">
-        <Link href="/calls">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-1.5" /> Back
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/calls">
+            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
+          </Link>
+          <h1 className="text-xl font-semibold">Call Detail</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCallback}
+            disabled={callbackMutation.isPending}
+            className="gap-1.5"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Call Back
           </Button>
-        </Link>
-        <h1 className="text-xl font-semibold">Call Detail</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSummarize}
+            disabled={summarizeMutation.isPending || !messages.length}
+            className="gap-1.5"
+          >
+            {summarizeMutation.isPending
+              ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Analyzing...</>
+              : <><Sparkles className="h-3.5 w-3.5" /> {call.summary ? "Re-summarize" : "Summarize"}</>}
+          </Button>
+        </div>
       </div>
 
       {/* Call metadata */}
@@ -93,20 +160,18 @@ export default function CallDetail() {
         <CardContent className="p-5">
           <div className="flex items-start gap-4 flex-wrap">
             <div className={cn("rounded-full p-3 shrink-0", call.direction === "inbound" ? "bg-blue-100 text-blue-600" : "bg-violet-100 text-violet-600")}>
-              {call.direction === "inbound"
-                ? <PhoneIncoming className="h-5 w-5" />
-                : <PhoneOutgoing className="h-5 w-5" />}
+              {call.direction === "inbound" ? <PhoneIncoming className="h-5 w-5" /> : <PhoneOutgoing className="h-5 w-5" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-lg font-semibold">
-                  {call.direction === "inbound" ? call.fromNumber : call.toNumber}
-                </span>
+                <span className="text-lg font-semibold">{callNumber}</span>
                 <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_COLORS[call.status] ?? "bg-muted text-muted-foreground")}>
                   {call.status}
                 </span>
-                {call.outcome && (
-                  <Badge variant="outline" className="text-xs capitalize">{call.outcome}</Badge>
+                {outcomeInfo && (
+                  <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium", outcomeInfo.color)}>
+                    {outcomeInfo.label}
+                  </span>
                 )}
               </div>
               <p className="text-sm text-muted-foreground mt-0.5">{formatDateFull(call.startedAt)}</p>
@@ -122,25 +187,33 @@ export default function CallDetail() {
               <div className="text-center">
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <MessageSquare className="h-3.5 w-3.5" />
-                  <span className="text-xs uppercase tracking-wide font-medium">Messages</span>
+                  <span className="text-xs uppercase tracking-wide font-medium">Turns</span>
                 </div>
                 <p className="font-semibold mt-0.5">{call.messageCount}</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <span className="text-xs uppercase tracking-wide font-medium">Direction</span>
-                </div>
-                <p className="font-semibold mt-0.5 capitalize">{call.direction}</p>
               </div>
             </div>
           </div>
 
           {call.summary && (
+            <div className="mt-4 pt-4 border-t border-border flex items-start gap-2">
+              <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">AI Summary</p>
+                <p className="text-sm text-foreground leading-relaxed">{call.summary}</p>
+              </div>
+            </div>
+          )}
+
+          {!call.summary && messages.length > 0 && (
             <div className="mt-4 pt-4 border-t border-border">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-                Summary
-              </p>
-              <p className="text-sm text-foreground leading-relaxed">{call.summary}</p>
+              <button
+                onClick={handleSummarize}
+                disabled={summarizeMutation.isPending}
+                className="flex items-center gap-2 text-sm text-primary hover:underline disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {summarizeMutation.isPending ? "Generating summary..." : "Generate AI summary"}
+              </button>
             </div>
           )}
         </CardContent>
@@ -149,7 +222,14 @@ export default function CallDetail() {
       {/* Transcript */}
       <Card className="border-card-border">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Transcript</CardTitle>
+          <CardTitle className="text-sm font-semibold">
+            Transcript
+            {messages.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {messages.length} messages
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {!messages.length ? (
@@ -159,22 +239,17 @@ export default function CallDetail() {
               {messages.map((msg) => {
                 const isAssistant = msg.role === "assistant";
                 return (
-                  <div
-                    key={msg.id}
-                    className={cn("flex gap-3", isAssistant ? "flex-row" : "flex-row-reverse")}
-                  >
+                  <div key={msg.id} className={cn("flex gap-3", isAssistant ? "flex-row" : "flex-row-reverse")}>
                     <div className={cn(
                       "h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5",
                       isAssistant ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                     )}>
                       {isAssistant ? <Bot className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
                     </div>
-                    <div className={cn("max-w-[75%]", isAssistant ? "" : "items-end flex flex-col")}>
+                    <div className={cn("max-w-[75%]", !isAssistant && "items-end flex flex-col")}>
                       <div className={cn(
                         "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                        isAssistant
-                          ? "bg-muted text-foreground rounded-tl-sm"
-                          : "bg-primary text-primary-foreground rounded-tr-sm"
+                        isAssistant ? "bg-muted text-foreground rounded-tl-sm" : "bg-primary text-primary-foreground rounded-tr-sm"
                       )}>
                         {msg.content}
                       </div>
@@ -199,6 +274,7 @@ export default function CallDetail() {
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
             {[
               { label: "Call SID", value: call.callSid },
+              { label: "Direction", value: call.direction },
               { label: "From", value: call.fromNumber },
               { label: "To", value: call.toNumber },
               { label: "Started", value: formatDateFull(call.startedAt) },

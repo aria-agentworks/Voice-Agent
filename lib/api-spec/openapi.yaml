@@ -433,6 +433,16 @@ paths:
           required: false
           schema:
             type: string
+        - name: outcome
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Paginated call history
@@ -459,6 +469,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VoiceCallDetail"
+
+  /voice/analytics:
+    get:
+      operationId: getVoiceAnalytics
+      tags: [voice]
+      summary: Get call analytics - hourly distribution and daily volume
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 7
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceAnalytics"
+
+  /voice/calls/live:
+    get:
+      operationId: getVoiceCallsLive
+      tags: [voice]
+      summary: Get currently in-progress calls
+      responses:
+        "200":
+          description: Live in-progress calls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoiceCall"
+
+  /voice/calls/{id}/summarize:
+    post:
+      operationId: summarizeVoiceCall
+      tags: [voice]
+      summary: Generate or regenerate AI summary and outcome for a call
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated call with summary and outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceCall"
 
   /voice/outbound:
     post:
@@ -1174,6 +1238,46 @@ components:
       required:
         - call
         - messages
+
+    VoiceHourlyCount:
+      type: object
+      properties:
+        hour:
+          type: integer
+        count:
+          type: integer
+      required: [hour, count]
+
+    VoiceDailyCount:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+        inbound:
+          type: integer
+        outbound:
+          type: integer
+      required: [date, count, inbound, outbound]
+
+    VoiceAnalytics:
+      type: object
+      properties:
+        hourly:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceHourlyCount"
+        daily:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceDailyCount"
+        peakHour:
+          type: integer
+          nullable: true
+        missedToday:
+          type: integer
+      required: [hourly, daily, missedToday]
 
     CreateOutboundCallInput:
       type: object
