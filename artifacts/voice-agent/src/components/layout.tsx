@@ -4,7 +4,7 @@ import {
   LayoutDashboard, PhoneCall, PhoneOutgoing, Settings2, Settings,
   Menu, X, Activity, CalendarDays, Plug2, Monitor, ShieldOff,
   ShieldCheck, BarChart3, FileText, MapPin, ChevronDown, ChevronRight,
-  LogOut, User,
+  LogOut, User, ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
 import { useGetVoiceAnalytics } from "@workspace/api-client-react";
@@ -27,6 +27,7 @@ const enterpriseNav = [
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/dnc", label: "DNC List", icon: ShieldOff },
   { href: "/audit", label: "Audit Logs", icon: ShieldCheck },
+  { href: "/trust", label: "Trust & Security", icon: ShieldAlert },
 ];
 
 function MissedBadge({ count }: { count: number }) {

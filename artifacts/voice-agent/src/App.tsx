@@ -21,6 +21,7 @@ import UsageMetrics from "@/pages/usage";
 import Reports from "@/pages/reports";
 import Locations from "@/pages/locations";
 import NotFound from "@/pages/not-found";
+import TrustSecurity from "@/pages/trust";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -278,6 +279,9 @@ function AppRoutes() {
             </Route>
             <Route path="/locations">
               <ProtectedLayout><Locations /></ProtectedLayout>
+            </Route>
+            <Route path="/trust">
+              <ProtectedLayout><TrustSecurity /></ProtectedLayout>
             </Route>
             <Route component={NotFound} />
           </Switch>
