@@ -77,6 +77,19 @@ router.get("/leads", async (req, res): Promise<void> => {
   );
 });
 
+router.post("/leads/refresh", async (_req, res): Promise<void> => {
+  lastFetchedAt = null; // force cache invalidation
+  const leads = await getLeads();
+
+  res.json(
+    GetLeadsResponse.parse({
+      leads,
+      total: leads.length,
+      fetched_at: lastFetchedAt?.toISOString() ?? new Date().toISOString(),
+    })
+  );
+});
+
 router.get("/leads/stats", async (_req, res): Promise<void> => {
   const leads = await getLeads();
 

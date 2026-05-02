@@ -49,6 +49,30 @@ export const GetLeadsResponse = zod.object({
 });
 
 /**
+ * Invalidates the lead cache and triggers a fresh fetch from all connectors
+ * @summary Force-refresh leads
+ */
+export const RefreshLeadsResponse = zod.object({
+  leads: zod.array(
+    zod.object({
+      id: zod.string(),
+      source: zod.string(),
+      text: zod.string(),
+      url: zod.string().nullish(),
+      contact: zod.string().nullish(),
+      intent_score: zod.number(),
+      intent_label: zod.string(),
+      subreddit: zod.string().nullish(),
+      author: zod.string().nullish(),
+      created_at: zod.string(),
+      saved: zod.boolean(),
+    }),
+  ),
+  total: zod.number(),
+  fetched_at: zod.string(),
+});
+
+/**
  * Summary statistics for the intent engine dashboard
  * @summary Get lead statistics
  */

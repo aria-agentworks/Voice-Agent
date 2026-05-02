@@ -1,13 +1,75 @@
-import { useGetLeadsStats, useGetLeads, useHealthCheck } from "@workspace/api-client-react";
+import { useGetLeadsStats, useGetLeads, useHealthCheck, useRefreshLeads, getGetLeadsQueryKey, getGetLeadsStatsQueryKey } from "@workspace/api-client-react";
 import { LeadCard } from "@/components/lead-card";
 import { Layout } from "@/components/layout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, AlertCircle, Database, Target, TrendingUp, Users } from "lucide-react";
+import { Activity, AlertCircle, Database, Target, TrendingUp, Users, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+function getRelativeTime(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 5) return "just now";
+  if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  return `${Math.floor(diffInSeconds / 86400)}d ago`;
+}
 
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useGetLeadsStats();
-  const { data: leadsData, isLoading: leadsLoading } = useGetLeads({ min_score: 8, limit: 5 });
+  const queryClient = useQueryClient();
+  
+  const [refreshInterval, setRefreshInterval] = useState<number>(() => {
+    const saved = localStorage.getItem("ie_refresh_interval");
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("ie_refresh_interval", refreshInterval.toString());
+  }, [refreshInterval]);
+
+  const { data: stats, isLoading: statsLoading } = useGetLeadsStats({
+    query: { refetchInterval: refreshInterval > 0 ? refreshInterval : false, queryKey: getGetLeadsStatsQueryKey() }
+  });
+  
+  const { data: leadsData, isLoading: leadsLoading } = useGetLeads(
+    { min_score: 8, limit: 5 },
+    { query: { refetchInterval: refreshInterval > 0 ? refreshInterval : false, queryKey: getGetLeadsQueryKey({min_score:8,limit:5}) } }
+  );
+  
   const { data: health } = useHealthCheck();
+
+  const refreshMutation = useRefreshLeads();
+
+  const handleRefresh = () => {
+    refreshMutation.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetLeadsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetLeadsStatsQueryKey() });
+      }
+    });
+  };
+
+  const [lastUpdated, setLastUpdated] = useState<string>("NEVER_FETCHED");
+
+  useEffect(() => {
+    const updateTime = () => {
+      if (leadsData?.fetched_at) {
+        setLastUpdated(`UPDATED ${getRelativeTime(leadsData.fetched_at)}`);
+      } else {
+        setLastUpdated("NEVER_FETCHED");
+      }
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [leadsData?.fetched_at]);
 
   return (
     <Layout>
@@ -16,10 +78,42 @@ export default function Dashboard() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">SIGNAL_DASHBOARD</h1>
             <p className="text-muted-foreground mt-1 text-sm">Real-time intent monitoring and analytics.</p>
+            <p className="text-xs font-mono text-muted-foreground mt-0.5">{lastUpdated}</p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <div className={`h-2 w-2 rounded-full ${health?.status === 'ok' ? 'bg-primary animate-pulse' : 'bg-destructive'}`} />
-            <span className="text-muted-foreground">SYSTEM_STATUS: {health?.status === 'ok' ? 'ONLINE' : 'OFFLINE'}</span>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Select 
+                value={refreshInterval.toString()} 
+                onValueChange={(val) => setRefreshInterval(parseInt(val, 10))}
+              >
+                <SelectTrigger className="w-[100px] h-8 text-xs font-mono" data-testid="select-refresh-interval">
+                  <SelectValue placeholder="Refresh" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">OFF</SelectItem>
+                  <SelectItem value="900000">15m</SelectItem>
+                  <SelectItem value="1800000">30m</SelectItem>
+                  <SelectItem value="3600000">1h</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8" 
+                onClick={handleRefresh}
+                disabled={refreshMutation.isPending}
+                data-testid="button-refresh-now"
+              >
+                <RefreshCw className={cn("h-4 w-4", refreshMutation.isPending && "animate-spin")} />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <div className={`h-2 w-2 rounded-full ${health?.status === 'ok' ? 'bg-primary animate-pulse' : 'bg-destructive'}`} />
+              <span className="text-muted-foreground">SYSTEM_STATUS: {health?.status === 'ok' ? 'ONLINE' : 'OFFLINE'}</span>
+            </div>
           </div>
         </div>
 
