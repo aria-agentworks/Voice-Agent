@@ -56,6 +56,11 @@ paths:
           schema:
             type: integer
             default: 50
+        - name: subreddit
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: List of scored leads
@@ -105,6 +110,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LeadsResponse"
+
+  /leads/{id}/status:
+    patch:
+      operationId: updateLeadStatus
+      tags: [leads]
+      summary: Update lead status
+      description: Update the outreach status of a saved lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadStatusInput"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateLeadStatusResult"
 
   /leads/{id}/save:
     post:
@@ -308,6 +339,9 @@ components:
           type: string
         saved:
           type: boolean
+        status:
+          type: string
+          nullable: true
       required:
         - id
         - source
@@ -385,6 +419,25 @@ components:
       required:
         - message
         - lead_id
+
+    UpdateLeadStatusInput:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    UpdateLeadStatusResult:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+      required:
+        - id
+        - status
 
     SaveLeadResult:
       type: object

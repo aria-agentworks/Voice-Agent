@@ -18,4 +18,5 @@ export interface Lead {
   author?: string | null;
   created_at: string;
   saved: boolean;
+  status?: string | null;
 }

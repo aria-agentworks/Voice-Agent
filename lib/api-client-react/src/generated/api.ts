@@ -31,6 +31,8 @@ import type {
   TestPhraseInput,
   TestPhraseResult,
   UpdateKeywordInput,
+  UpdateLeadStatusInput,
+  UpdateLeadStatusResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -446,6 +448,94 @@ export function useGetSavedLeads<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Update the outreach status of a saved lead
+ * @summary Update lead status
+ */
+export const getUpdateLeadStatusUrl = (id: string) => {
+  return `/api/leads/${id}/status`;
+};
+
+export const updateLeadStatus = async (
+  id: string,
+  updateLeadStatusInput: UpdateLeadStatusInput,
+  options?: RequestInit,
+): Promise<UpdateLeadStatusResult> => {
+  return customFetch<UpdateLeadStatusResult>(getUpdateLeadStatusUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLeadStatusInput),
+  });
+};
+
+export const getUpdateLeadStatusMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLeadStatus>>,
+    TError,
+    { id: string; data: BodyType<UpdateLeadStatusInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateLeadStatus>>,
+  TError,
+  { id: string; data: BodyType<UpdateLeadStatusInput> },
+  TContext
+> => {
+  const mutationKey = ["updateLeadStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateLeadStatus>>,
+    { id: string; data: BodyType<UpdateLeadStatusInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateLeadStatus(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateLeadStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateLeadStatus>>
+>;
+export type UpdateLeadStatusMutationBody = BodyType<UpdateLeadStatusInput>;
+export type UpdateLeadStatusMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update lead status
+ */
+export const useUpdateLeadStatus = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLeadStatus>>,
+    TError,
+    { id: string; data: BodyType<UpdateLeadStatusInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateLeadStatus>>,
+  TError,
+  { id: string; data: BodyType<UpdateLeadStatusInput> },
+  TContext
+> => {
+  return useMutation(getUpdateLeadStatusMutationOptions(options));
+};
 
 /**
  * Save or unsave a lead by ID

@@ -23,3 +23,5 @@ export * from "./sourcesResponse";
 export * from "./testPhraseInput";
 export * from "./testPhraseResult";
 export * from "./updateKeywordInput";
+export * from "./updateLeadStatusInput";
+export * from "./updateLeadStatusResult";

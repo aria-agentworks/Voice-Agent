@@ -1,11 +1,45 @@
 import { Layout } from "@/components/layout";
 import { LeadCard } from "@/components/lead-card";
-import { useGetSavedLeads } from "@workspace/api-client-react";
+import { useGetSavedLeads, useUpdateLeadStatus, getGetSavedLeadsQueryKey } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookmarkX } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function SavedLeads() {
   const { data: leadsData, isLoading } = useGetSavedLeads();
+  const updateStatus = useUpdateLeadStatus();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleStatusChange = (id: string, value: string) => {
+    updateStatus.mutate(
+      { id, data: { status: value as any } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetSavedLeadsQueryKey() });
+        },
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to update status.",
+            variant: "destructive",
+          });
+        }
+      }
+    );
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'contacted': return "text-blue-400";
+      case 'following_up': return "text-amber-400";
+      case 'closed': return "text-emerald-400";
+      default: return "text-muted-foreground";
+    }
+  };
 
   return (
     <Layout>
@@ -22,7 +56,29 @@ export default function SavedLeads() {
             ))
           ) : leadsData?.leads && leadsData.leads.length > 0 ? (
             leadsData.leads.map(lead => (
-              <LeadCard key={lead.id} lead={lead} />
+              <LeadCard 
+                key={lead.id} 
+                lead={lead} 
+                statusSelector={
+                  <Select 
+                    value={lead.status || "new"} 
+                    onValueChange={(value) => handleStatusChange(lead.id, value)}
+                  >
+                    <SelectTrigger 
+                      className={cn("h-6 text-[10px] font-mono w-[110px] uppercase", getStatusColor(lead.status || "new"))}
+                      data-testid="select-lead-status"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new" className="text-[10px] font-mono">NEW</SelectItem>
+                      <SelectItem value="contacted" className="text-[10px] font-mono text-blue-400">CONTACTED</SelectItem>
+                      <SelectItem value="following_up" className="text-[10px] font-mono text-amber-400">FOLLOWING_UP</SelectItem>
+                      <SelectItem value="closed" className="text-[10px] font-mono text-emerald-400">CLOSED</SelectItem>
+                    </SelectContent>
+                  </Select>
+                }
+              />
             ))
           ) : (
             <div className="p-12 border border-dashed border-border rounded-md flex flex-col items-center justify-center text-center bg-card/50">

@@ -13,6 +13,7 @@ export const savedLeadsTable = pgTable("saved_leads", {
   subreddit: text("subreddit"),
   author: text("author"),
   saved: boolean("saved").notNull().default(true),
+  status: text("status").notNull().default("new"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   savedAt: timestamp("saved_at").notNull().defaultNow(),
 });

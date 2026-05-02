@@ -26,6 +26,7 @@ export const GetLeadsQueryParams = zod.object({
   min_score: zod.coerce.number().default(getLeadsQueryMinScoreDefault),
   source: zod.coerce.string().optional(),
   limit: zod.coerce.number().default(getLeadsQueryLimitDefault),
+  subreddit: zod.coerce.string().optional(),
 });
 
 export const GetLeadsResponse = zod.object({
@@ -42,6 +43,7 @@ export const GetLeadsResponse = zod.object({
       author: zod.string().nullish(),
       created_at: zod.string(),
       saved: zod.boolean(),
+      status: zod.string().nullish(),
     }),
   ),
   total: zod.number(),
@@ -66,6 +68,7 @@ export const RefreshLeadsResponse = zod.object({
       author: zod.string().nullish(),
       created_at: zod.string(),
       saved: zod.boolean(),
+      status: zod.string().nullish(),
     }),
   ),
   total: zod.number(),
@@ -110,10 +113,28 @@ export const GetSavedLeadsResponse = zod.object({
       author: zod.string().nullish(),
       created_at: zod.string(),
       saved: zod.boolean(),
+      status: zod.string().nullish(),
     }),
   ),
   total: zod.number(),
   fetched_at: zod.string(),
+});
+
+/**
+ * Update the outreach status of a saved lead
+ * @summary Update lead status
+ */
+export const UpdateLeadStatusParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateLeadStatusBody = zod.object({
+  status: zod.string(),
+});
+
+export const UpdateLeadStatusResponse = zod.object({
+  id: zod.string(),
+  status: zod.string(),
 });
 
 /**

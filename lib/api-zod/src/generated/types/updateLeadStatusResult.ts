@@ -6,9 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetLeadsParams = {
-  min_score?: number;
-  source?: string;
-  limit?: number;
-  subreddit?: string;
-};
+export interface UpdateLeadStatusResult {
+  id: string;
+  status: string;
+}

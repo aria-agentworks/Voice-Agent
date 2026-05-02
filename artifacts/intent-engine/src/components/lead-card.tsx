@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { Bookmark, BookmarkCheck, ExternalLink, Bot, Send } from "lucide-react";
+import { Bookmark, BookmarkCheck, ExternalLink, Bot, Copy, Check } from "lucide-react";
 import { SiReddit, SiX, SiGithub, SiHackerone } from "react-icons/si";
 import { Lead } from "@workspace/api-client-react/src/generated/api.schemas";
 import { useSaveLead, getGetSavedLeadsQueryKey, getGetLeadsQueryKey, useGenerateResponse } from "@workspace/api-client-react";
@@ -12,17 +12,26 @@ import { cn } from "@/lib/utils";
 
 interface LeadCardProps {
   lead: Lead;
+  statusSelector?: React.ReactNode;
 }
 
-export function LeadCard({ lead }: LeadCardProps) {
+export function LeadCard({ lead, statusSelector }: LeadCardProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const saveLead = useSaveLead();
   const generateResponse = useGenerateResponse();
   const [response, setResponse] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const isHigh = lead.intent_score >= 8;
   const isMedium = lead.intent_score >= 5 && lead.intent_score < 8;
+
+  const handleCopy = async () => {
+    if (!response) return;
+    await navigator.clipboard.writeText(response);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleSave = () => {
     saveLead.mutate(
@@ -99,6 +108,7 @@ export function LeadCard({ lead }: LeadCardProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {statusSelector}
             <Badge variant="outline" className={cn(
               "font-mono rounded-sm px-2",
               isHigh ? "border-primary/50 text-primary bg-primary/10" :
@@ -159,9 +169,9 @@ export function LeadCard({ lead }: LeadCardProps) {
             </div>
             <p className="text-sm font-sans text-foreground/90 mt-1">{response}</p>
             <div className="flex justify-end mt-3">
-              <Button size="sm" className="h-7 text-xs bg-primary text-primary-foreground hover:bg-primary/90">
-                <Send className="h-3 w-3 mr-2" />
-                COPY_&_SEND
+              <Button size="sm" className="h-7 text-xs bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleCopy}>
+                {copied ? <Check className="h-3 w-3 mr-2" /> : <Copy className="h-3 w-3 mr-2" />}
+                {copied ? "COPIED" : "COPY"}
               </Button>
             </div>
           </div>

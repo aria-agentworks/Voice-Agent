@@ -21,6 +21,7 @@ export interface Lead {
   author?: string | null;
   created_at: string;
   saved: boolean;
+  status?: string | null;
 }
 
 export interface LeadsResponse {
@@ -48,6 +49,15 @@ export interface LeadsStats {
 export interface GeneratedResponse {
   message: string;
   lead_id: string;
+}
+
+export interface UpdateLeadStatusInput {
+  status: string;
+}
+
+export interface UpdateLeadStatusResult {
+  id: string;
+  status: string;
 }
 
 export interface SaveLeadResult {
@@ -114,4 +124,5 @@ export type GetLeadsParams = {
   min_score?: number;
   source?: string;
   limit?: number;
+  subreddit?: string;
 };

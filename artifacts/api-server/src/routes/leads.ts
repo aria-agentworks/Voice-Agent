@@ -11,6 +11,9 @@ import {
   GenerateResponseParams,
   GenerateResponseResponse,
   GetSourcesResponse,
+  UpdateLeadStatusParams,
+  UpdateLeadStatusBody,
+  UpdateLeadStatusResponse,
 } from "@workspace/api-zod";
 import { fetchRedditLeads, getExampleLeads } from "../lib/reddit";
 import { generateResponse } from "../lib/responder";
@@ -56,7 +59,7 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const { min_score = 0, source, limit = 50 } = query.data;
+  const { min_score = 0, source, subreddit, limit = 50 } = query.data;
   let leads = await getLeads();
 
   if (min_score > 0) {
@@ -64,6 +67,9 @@ router.get("/leads", async (req, res): Promise<void> => {
   }
   if (source) {
     leads = leads.filter((l) => l.source === source);
+  }
+  if (subreddit) {
+    leads = leads.filter((l) => l.subreddit?.toLowerCase().includes(subreddit.toLowerCase()));
   }
 
   leads = leads.slice(0, limit);
@@ -136,6 +142,7 @@ router.get("/leads/saved", async (_req, res): Promise<void> => {
     author: row.author ?? null,
     created_at: row.createdAt.toISOString(),
     saved: true,
+    status: row.status ?? "new",
   }));
 
   res.json(
@@ -145,6 +152,31 @@ router.get("/leads/saved", async (_req, res): Promise<void> => {
       fetched_at: new Date().toISOString(),
     })
   );
+});
+
+router.patch("/leads/:id/status", async (req, res): Promise<void> => {
+  const params = UpdateLeadStatusParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = UpdateLeadStatusBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const { id } = params.data;
+  const { status } = body.data;
+
+  const existing = await db.select().from(savedLeadsTable).where(eq(savedLeadsTable.id, id));
+  if (existing.length === 0) {
+    res.status(404).json({ error: "Saved lead not found" });
+    return;
+  }
+
+  await db.update(savedLeadsTable).set({ status }).where(eq(savedLeadsTable.id, id));
+  res.json(UpdateLeadStatusResponse.parse({ id, status }));
 });
 
 router.post("/leads/:id/save", async (req, res): Promise<void> => {

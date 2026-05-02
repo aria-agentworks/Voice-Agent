@@ -5,10 +5,12 @@ import { useGetLeads, useGetSources } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Filter, SlidersHorizontal } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 export default function LeadsExplorer() {
   const [minScore, setMinScore] = useState<number | undefined>(undefined);
   const [source, setSource] = useState<string | undefined>(undefined);
+  const [subredditFilter, setSubredditFilter] = useState("");
 
   const { data: leadsData, isLoading } = useGetLeads({ 
     min_score: minScore, 
@@ -16,6 +18,11 @@ export default function LeadsExplorer() {
   });
   
   const { data: sourcesData } = useGetSources();
+
+  const filteredLeads = leadsData?.leads?.filter(lead => {
+    if (!subredditFilter) return true;
+    return lead.subreddit?.toLowerCase().includes(subredditFilter.toLowerCase());
+  });
 
   return (
     <Layout>
@@ -25,13 +32,23 @@ export default function LeadsExplorer() {
           <p className="text-muted-foreground mt-1 text-sm">Filter and analyze captured intent signals.</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 border border-border bg-card p-4 rounded-md">
+        <div className="flex flex-col md:flex-row gap-4 border border-border bg-card p-4 rounded-md">
           <div className="flex items-center gap-2 border-r border-border pr-4 mr-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-semibold">FILTERS</span>
           </div>
 
           <div className="flex flex-1 flex-col sm:flex-row gap-4">
+            <div className="w-full sm:w-48">
+              <Input 
+                placeholder="filter by subreddit..." 
+                value={subredditFilter} 
+                onChange={(e) => setSubredditFilter(e.target.value)} 
+                className="font-mono text-xs h-9"
+                data-testid="input-subreddit-filter"
+              />
+            </div>
+
             <div className="w-full sm:w-48">
               <Select value={minScore?.toString() || "0"} onValueChange={(v) => setMinScore(Number(v))}>
                 <SelectTrigger className="font-mono text-xs h-9">
@@ -60,9 +77,9 @@ export default function LeadsExplorer() {
             </div>
           </div>
           
-          <div className="flex items-center ml-auto font-mono text-xs text-muted-foreground bg-muted px-3 py-1 rounded">
+          <div className="flex items-center ml-auto font-mono text-xs text-muted-foreground bg-muted px-3 py-1 rounded mt-4 sm:mt-0">
             <SlidersHorizontal className="h-3 w-3 mr-2" />
-            {leadsData?.total || 0} MATCHES
+            {filteredLeads?.length || 0} MATCHES
           </div>
         </div>
 
@@ -71,8 +88,8 @@ export default function LeadsExplorer() {
             Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-48 w-full bg-muted/50 rounded-md border border-border" />
             ))
-          ) : leadsData?.leads && leadsData.leads.length > 0 ? (
-            leadsData.leads.map(lead => (
+          ) : filteredLeads && filteredLeads.length > 0 ? (
+            filteredLeads.map(lead => (
               <LeadCard key={lead.id} lead={lead} />
             ))
           ) : (
