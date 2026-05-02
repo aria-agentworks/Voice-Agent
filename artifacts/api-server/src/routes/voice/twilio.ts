@@ -4,6 +4,7 @@ import { voiceCalls, voiceMessages, voiceConfigs, voiceAppointments, voiceWebhoo
 import { eq, and, ilike, or } from "drizzle-orm";
 import { generateVoiceResponseWithFunctions, isWithinBusinessHours, getBusinessHoursSummary } from "./gpt.js";
 import { callWebhookAction } from "./integrations.js";
+import { sendAppointmentConfirmation } from "./sms.js";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();

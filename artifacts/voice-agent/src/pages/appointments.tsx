@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Phone, Clock, CheckCircle2, XCircle, AlertCircle, Plus, Search, ChevronDown, User, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Calendar, Phone, Clock, CheckCircle2, XCircle, AlertCircle,
+  Plus, User, X, MessageSquare, Send, Loader2,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +27,6 @@ interface Appointment {
   externalId?: string;
   callId?: string;
   createdAt: string;
-  call?: { id: string; callSid: string; fromNumber: string } | null;
 }
 
 interface AppointmentsResponse {
@@ -35,10 +37,10 @@ interface AppointmentsResponse {
 }
 
 const STATUS_CONFIG = {
-  pending: { label: "Pending", icon: AlertCircle, color: "bg-amber-100 text-amber-700 border-amber-200" },
-  confirmed: { label: "Confirmed", icon: CheckCircle2, color: "bg-green-100 text-green-700 border-green-200" },
-  cancelled: { label: "Cancelled", icon: XCircle, color: "bg-red-100 text-red-700 border-red-200" },
-  completed: { label: "Completed", icon: CheckCircle2, color: "bg-blue-100 text-blue-700 border-blue-200" },
+  pending:   { label: "Pending",   icon: AlertCircle,   color: "bg-amber-100 text-amber-700 border-amber-200" },
+  confirmed: { label: "Confirmed", icon: CheckCircle2,  color: "bg-green-100 text-green-700 border-green-200" },
+  cancelled: { label: "Cancelled", icon: XCircle,       color: "bg-red-100 text-red-700 border-red-200" },
+  completed: { label: "Completed", icon: CheckCircle2,  color: "bg-blue-100 text-blue-700 border-blue-200" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -56,16 +58,36 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const [form, setForm] = useState({
     patientName: "", patientPhone: "", requestedDate: "", requestedTime: "", reason: "", notes: "",
   });
+  const [sending, setSending] = useState(false);
   const { toast } = useToast();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.patientName.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
-    const res = await fetch(`${API}/voice/appointments`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
-    });
-    if (res.ok) { toast({ title: "Appointment created" }); onCreated(); onClose(); }
-    else { toast({ title: "Failed to create", variant: "destructive" }); }
+    setSending(true);
+    try {
+      const res = await fetch(`${API}/voice/appointments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.sms?.success) {
+          toast({ title: "Appointment created", description: "SMS confirmation sent to patient." });
+        } else if (form.patientPhone && data.sms?.error) {
+          toast({ title: "Appointment created", description: `SMS skipped: ${data.sms.error}` });
+        } else {
+          toast({ title: "Appointment created" });
+        }
+        onCreated();
+        onClose();
+      } else {
+        toast({ title: "Failed to create", variant: "destructive" });
+      }
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -102,9 +124,18 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Additional notes" />
             </div>
           </div>
+          {form.patientPhone && (
+            <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
+              <MessageSquare className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              <p className="text-xs text-blue-700">SMS confirmation will be sent to {form.patientPhone}</p>
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
-            <Button type="submit" className="flex-1">Create</Button>
+            <Button type="submit" className="flex-1" disabled={sending}>
+              {sending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Create{form.patientPhone ? " + Send SMS" : ""}
+            </Button>
           </div>
         </form>
       </div>
@@ -112,10 +143,23 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   );
 }
 
+function SmsBadge({ sending }: { sending: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+      sending ? "bg-blue-50 border-blue-200 text-blue-600 animate-pulse" : "bg-green-50 border-green-200 text-green-700"
+    }`}>
+      <MessageSquare className="h-2.5 w-2.5" />
+      {sending ? "Sending…" : "SMS sent"}
+    </span>
+  );
+}
+
 export default function Appointments() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [smsSending, setSmsSending] = useState<Record<string, boolean>>({});
+  const [smsSent, setSmsSent] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -137,9 +181,9 @@ export default function Appointments() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      toast({ title: "Appointment updated" });
+      toast({ title: status === "confirmed" ? "Appointment confirmed" : "Appointment cancelled" });
     },
   });
 
@@ -153,7 +197,30 @@ export default function Appointments() {
     },
   });
 
+  async function handleSendSms(appt: Appointment) {
+    if (!appt.patientPhone) {
+      toast({ title: "No phone number", description: "Add a phone number to this appointment first.", variant: "destructive" });
+      return;
+    }
+    setSmsSending((s) => ({ ...s, [appt.id]: true }));
+    try {
+      const res = await fetch(`${API}/voice/appointments/${appt.id}/sms`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setSmsSent((s) => ({ ...s, [appt.id]: true }));
+        toast({ title: "SMS sent!", description: `Confirmation sent to ${appt.patientPhone}` });
+      } else {
+        toast({ title: "SMS failed", description: data.error ?? "Unknown error", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "SMS failed", variant: "destructive" });
+    } finally {
+      setSmsSending((s) => ({ ...s, [appt.id]: false }));
+    }
+  }
+
   const appointments = data?.appointments ?? [];
+
   const counts = { pending: 0, confirmed: 0, cancelled: 0, completed: 0 };
   appointments.forEach((a) => { if (a.status in counts) counts[a.status as keyof typeof counts]++; });
 
@@ -170,7 +237,7 @@ export default function Appointments() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Appointments</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Requests booked by the AI agent during calls
+            Requests booked by the AI agent — confirm, cancel, or send SMS reminders
           </p>
         </div>
         <Button onClick={() => setShowCreate(true)} size="sm" className="gap-1.5">
@@ -203,7 +270,7 @@ export default function Appointments() {
         })}
       </div>
 
-      {/* Filter */}
+      {/* Filter bar */}
       <div className="flex items-center gap-3">
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-40">
@@ -227,7 +294,7 @@ export default function Appointments() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
               Loading...
             </div>
           ) : appointments.length === 0 ? (
@@ -245,10 +312,13 @@ export default function Appointments() {
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
                     <User className="h-4 w-4 text-muted-foreground" />
                   </div>
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{appt.patientName}</span>
                       <StatusBadge status={appt.status} />
+                      {smsSent[appt.id] && <SmsBadge sending={false} />}
+                      {smsSending[appt.id] && <SmsBadge sending={true} />}
                       {appt.externalId && (
                         <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                           EXT: {appt.externalId}
@@ -276,7 +346,23 @@ export default function Appointments() {
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">{appt.reason}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    {appt.patientPhone && appt.status !== "cancelled" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1 text-blue-600 border-blue-200 hover:bg-blue-50"
+                        onClick={() => handleSendSms(appt)}
+                        disabled={smsSending[appt.id]}
+                      >
+                        {smsSending[appt.id]
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : <Send className="h-3 w-3" />
+                        }
+                        SMS
+                      </Button>
+                    )}
                     {appt.status === "pending" && (
                       <Button
                         size="sm"

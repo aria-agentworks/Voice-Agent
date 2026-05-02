@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { voiceAppointments } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
+import { sendAppointmentConfirmation } from "./sms.js";
 
 const router = Router();
 
@@ -40,8 +41,10 @@ router.get("/voice/appointments", async (req, res) => {
 
 router.post("/voice/appointments", async (req, res) => {
   try {
-    const { patientName, patientPhone, requestedDate, requestedTime, reason, notes, callId } =
-      req.body as Record<string, string>;
+    const {
+      patientName, patientPhone, requestedDate, requestedTime,
+      reason, notes, callId, sendSms,
+    } = req.body as Record<string, string> & { sendSms?: boolean };
 
     if (!patientName) {
       return res.status(400).json({ error: "patientName is required" });
@@ -61,7 +64,13 @@ router.post("/voice/appointments", async (req, res) => {
       })
       .returning();
 
-    res.status(201).json(appointment);
+    // Auto-send SMS if phone number present and sendSms not explicitly false
+    let smsResult: { success: boolean; sid?: string; error?: string } | undefined;
+    if (appointment.patientPhone && sendSms !== false) {
+      smsResult = await sendAppointmentConfirmation(appointment.id, req.log);
+    }
+
+    res.status(201).json({ ...appointment, sms: smsResult });
   } catch (err) {
     req.log.error({ err }, "Error creating appointment");
     res.status(500).json({ error: "Failed to create appointment" });
@@ -95,6 +104,21 @@ router.put("/voice/appointments/:id", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Error updating appointment");
     res.status(500).json({ error: "Failed to update appointment" });
+  }
+});
+
+router.post("/voice/appointments/:id/sms", async (req, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    const result = await sendAppointmentConfirmation(id, req.log);
+    if (result.success) {
+      res.json({ success: true, sid: result.sid });
+    } else {
+      res.status(400).json({ success: false, error: result.error });
+    }
+  } catch (err) {
+    req.log.error({ err }, "Error sending SMS");
+    res.status(500).json({ success: false, error: "Failed to send SMS" });
   }
 });
 
