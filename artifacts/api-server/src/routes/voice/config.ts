@@ -137,6 +137,10 @@ router.put("/voice/config", async (req, res) => {
       updateData.twilioAuthToken = (twilioAuthToken as string) || null;
     if (twilioPhoneNumber !== undefined)
       updateData.twilioPhoneNumber = (twilioPhoneNumber as string) || null;
+    if ((body as Record<string, unknown>).faqJson !== undefined)
+      updateData.faqJson = (body as Record<string, unknown>).faqJson as string;
+    if ((body as Record<string, unknown>).scriptJson !== undefined)
+      updateData.scriptJson = (body as Record<string, unknown>).scriptJson as string;
     if (isActive !== undefined) updateData.isActive = isActive as boolean;
     updateData.updatedAt = new Date();
 

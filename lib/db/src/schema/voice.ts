@@ -13,6 +13,8 @@ export const voiceConfigs = pgTable("voice_configs", {
   twilioAccountSid: text("twilio_account_sid"),
   twilioAuthToken: text("twilio_auth_token"),
   twilioPhoneNumber: text("twilio_phone_number"),
+  faqJson: text("faq_json").notNull().default("[]"),
+  scriptJson: text("script_json").notNull().default(""),
   isActive: boolean("is_active").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

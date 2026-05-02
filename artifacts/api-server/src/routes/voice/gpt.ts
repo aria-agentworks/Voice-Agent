@@ -5,6 +5,11 @@ interface ConversationMessage {
   content: string;
 }
 
+interface FaqEntry {
+  question: string;
+  answer: string;
+}
+
 interface BusinessConfig {
   businessName: string;
   businessType: string;
@@ -12,6 +17,8 @@ interface BusinessConfig {
   instructions: string;
   hoursJson: string;
   servicesJson: string;
+  faqJson?: string | null;
+  scriptJson?: string | null;
   transferNumber?: string | null;
   timezone?: string | null;
 }
@@ -61,7 +68,7 @@ export function isWithinBusinessHours(hoursJson: string, timezone?: string | nul
 
     return currentMinutes >= openMin && currentMinutes < closeMin;
   } catch {
-    return true; // default open if hours not configured
+    return true;
   }
 }
 
@@ -88,20 +95,38 @@ export async function generateVoiceResponse(
     services = JSON.parse(config.servicesJson);
   } catch {}
 
+  let faqs: FaqEntry[] = [];
+  try {
+    faqs = JSON.parse(config.faqJson ?? "[]");
+  } catch {}
+
   const hoursStr = getBusinessHoursSummary(config.hoursJson);
   const businessTypeContext =
     BUSINESS_TYPE_CONTEXT[config.businessType] || BUSINESS_TYPE_CONTEXT.general;
 
-  // Detect if caller wants to be transferred based on conversation
   const wantsTransfer =
     history.some((m) => m.role === "assistant" && m.content.toLowerCase().includes("transfer you")) &&
     config.transferNumber;
+
+  const faqSection =
+    faqs.length > 0
+      ? [
+          "KNOWLEDGE BASE — use these exact answers when callers ask these questions:",
+          ...faqs.map((f, i) => `Q${i + 1}: ${f.question}\nA${i + 1}: ${f.answer}`),
+        ].join("\n")
+      : "";
+
+  const scriptSection = config.scriptJson?.trim()
+    ? `CALL SCRIPT — follow this flow during the call:\n${config.scriptJson.trim()}`
+    : "";
 
   const systemContent = [
     `You are the AI front desk assistant for ${config.businessName}, ${businessTypeContext}.`,
     services.length > 0 ? `Services offered: ${services.join(", ")}.` : "",
     hoursStr ? `Business hours: ${hoursStr}.` : "",
     config.instructions ? `Special instructions: ${config.instructions}` : "",
+    faqSection,
+    scriptSection,
     "",
     "CRITICAL RULES FOR PHONE CALLS:",
     "- Keep every response to 1-2 short sentences maximum. This is a phone call — be concise.",
@@ -112,6 +137,7 @@ export async function generateVoiceResponse(
     "- When confirming an appointment, repeat back the details clearly.",
     "- If a caller seems upset or distressed, express empathy before solving their issue.",
     "- If you cannot help with something specific, offer to take a message or transfer them.",
+    "- When answering from the knowledge base, use the exact answer provided — do not improvise.",
     wantsTransfer ? `- The caller is being transferred. Say: "Connecting you now. Please hold."` : "",
     !wantsTransfer && config.transferNumber
       ? `- If the caller needs urgent help or insists on speaking to a person, say: "Let me transfer you to a staff member. Please hold."`
